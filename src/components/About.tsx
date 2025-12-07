@@ -13,7 +13,7 @@ const features = [
     },
     {
         icon: Star,
-        title: 'Only On The Market',
+        title: 'Only One On The Market',
         description: 'We are the only company offering fully custom printed athletic tapes'
     }
 ];
