@@ -14,13 +14,18 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-export async function savePreorder(email: string, designUrl: string, quantity: number, total: number) {
+interface PreorderData {
+    email: string;
+    originalImageUrl: string;  // The uploaded design
+    tapePreviewUrl: string;    // The design on tape
+    quantity: number;
+    total: number;
+}
+
+export async function savePreorder(data: PreorderData) {
     try {
         const docRef = await addDoc(collection(db, "preorders"), {
-            email,
-            designUrl,
-            quantity,
-            total,
+            ...data,
             status: "pending",
             createdAt: serverTimestamp()
         });

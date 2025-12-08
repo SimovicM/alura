@@ -4,6 +4,7 @@ import { ArrowLeft, Plus, Minus, ShoppingCart, X, Loader2, CheckCircle } from 'l
 import { motion, AnimatePresence } from 'framer-motion';
 import TapeConfigurator from '../components/TapeConfigurator';
 import { savePreorder } from '../lib/firebase';
+import { uploadToImgBB, uploadBase64ToImgBB, generateUniqueId } from '../lib/imgbb';
 import type { CustomDesign } from '../types';
 
 const PRICE_PER_ROLL = 250;
@@ -21,6 +22,7 @@ export default function CustomizerPage({ onAddToCart, onOpenCart }: CustomizerPa
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitSuccess, setSubmitSuccess] = useState(false);
     const [submitError, setSubmitError] = useState('');
+    const [uploadProgress, setUploadProgress] = useState('');
 
     const handleDesignReady = (imageDataUrl: string, file: File) => {
         setCurrentDesign({ url: imageDataUrl, file });
@@ -40,25 +42,51 @@ export default function CustomizerPage({ onAddToCart, onOpenCart }: CustomizerPa
             return;
         }
 
+        if (!currentDesign) {
+            setSubmitError('No design found. Please upload a design first.');
+            return;
+        }
+
         setIsSubmitting(true);
         setSubmitError('');
+        setUploadProgress('Uploading your design...');
 
-        const result = await savePreorder(
-            email,
-            currentDesign?.url || '',
-            quantity,
-            quantity * PRICE_PER_ROLL
-        );
+        try {
+            // Generate unique ID for this order
+            const uniqueId = generateUniqueId();
 
-        if (result.success) {
-            setSubmitSuccess(true);
-            setTimeout(() => {
-                setShowPreorderModal(false);
-                setSubmitSuccess(false);
-                setEmail('');
-            }, 2000);
-        } else {
-            setSubmitError('Failed to submit preorder. Please try again.');
+            // Upload original design to ImgBB
+            setUploadProgress('Uploading original design...');
+            const originalImageUrl = await uploadToImgBB(currentDesign.file, `${uniqueId}`);
+
+            // Upload tape preview to ImgBB
+            setUploadProgress('Uploading tape preview...');
+            const tapePreviewUrl = await uploadBase64ToImgBB(currentDesign.url, `${uniqueId}_tape`);
+
+            // Save to Firebase
+            setUploadProgress('Saving your preorder...');
+            const result = await savePreorder({
+                email,
+                originalImageUrl,
+                tapePreviewUrl,
+                quantity,
+                total: quantity * PRICE_PER_ROLL
+            });
+
+            if (result.success) {
+                setSubmitSuccess(true);
+                setTimeout(() => {
+                    setShowPreorderModal(false);
+                    setSubmitSuccess(false);
+                    setEmail('');
+                    setUploadProgress('');
+                }, 2000);
+            } else {
+                setSubmitError('Failed to submit preorder. Please try again.');
+            }
+        } catch (error) {
+            console.error('Preorder error:', error);
+            setSubmitError('Failed to upload images. Please try again.');
         }
 
         setIsSubmitting(false);
@@ -96,6 +124,7 @@ export default function CustomizerPage({ onAddToCart, onOpenCart }: CustomizerPa
                                         <button
                                             onClick={() => setShowPreorderModal(false)}
                                             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
+                                            disabled={isSubmitting}
                                         >
                                             <X className="w-5 h-5" />
                                         </button>
@@ -123,7 +152,8 @@ export default function CustomizerPage({ onAddToCart, onOpenCart }: CustomizerPa
                                             value={email}
                                             onChange={(e) => setEmail(e.target.value)}
                                             placeholder="you@example.com"
-                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors"
+                                            disabled={isSubmitting}
+                                            className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-white placeholder-gray-500 focus:outline-none focus:border-primary transition-colors disabled:opacity-50"
                                         />
                                         {submitError && (
                                             <p className="text-red-400 text-sm mt-2">{submitError}</p>
@@ -141,7 +171,10 @@ export default function CustomizerPage({ onAddToCart, onOpenCart }: CustomizerPa
                                         className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-4 rounded-xl font-bold transition-all text-lg"
                                     >
                                         {isSubmitting ? (
-                                            <Loader2 className="w-5 h-5 animate-spin" />
+                                            <>
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                                <span className="text-sm">{uploadProgress}</span>
+                                            </>
                                         ) : (
                                             <>
                                                 <ShoppingCart className="w-5 h-5" />

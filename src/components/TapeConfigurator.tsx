@@ -22,6 +22,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showHelp, setShowHelp] = useState(false);
 
+    // Use a ref for transform to avoid stale closure issues
     const [transform, setTransform] = useState({
         x: CANVAS_WIDTH / 2,
         y: CANVAS_HEIGHT / 2,
@@ -130,54 +131,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
     };
 
     const endDrag = () => setIsDragging(false);
-
-    // Transform handlers - fixed to properly update state
-    const rotateLeft = () => setTransform(prev => ({ ...prev, rotation: prev.rotation - 15 }));
-    const rotateRight = () => setTransform(prev => ({ ...prev, rotation: prev.rotation + 15 }));
-    const zoomOut = () => setTransform(prev => ({ ...prev, scale: Math.max(0.02, prev.scale - 0.02) }));
-    const zoomIn = () => setTransform(prev => ({ ...prev, scale: Math.min(1.5, prev.scale + 0.02) }));
     const handleReset = () => setTransform({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.15, rotation: 0 });
-
-    // Control buttons component
-    const ControlButtons = () => (
-        <div className="flex gap-1 sm:gap-2 bg-black/90 backdrop-blur-sm rounded-full p-1.5 sm:p-2 shadow-xl border border-white/10">
-            <button
-                type="button"
-                onClick={rotateLeft}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-            >
-                <RotateCw className="w-4 h-4 sm:w-5 sm:h-5 transform -scale-x-100" />
-            </button>
-            <button
-                type="button"
-                onClick={zoomOut}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-            >
-                <ZoomOut className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <button
-                type="button"
-                onClick={zoomIn}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-            >
-                <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <button
-                type="button"
-                onClick={rotateRight}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-            >
-                <RotateCw className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-            <button
-                type="button"
-                onClick={handleReset}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-            >
-                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
-        </div>
-    );
 
     if (isLoading) {
         return (
@@ -230,7 +184,26 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                                 />
                             </div>
 
-                            {userImage && <ControlButtons />}
+                            {/* Fullscreen Controls */}
+                            {userImage && (
+                                <div className="flex gap-2 bg-black/90 backdrop-blur-sm rounded-full p-2 shadow-xl border border-white/10">
+                                    <button type="button" onClick={() => setTransform(p => ({ ...p, rotation: p.rotation - 15 }))} className="w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95">
+                                        <RotateCw className="w-5 h-5 transform -scale-x-100" />
+                                    </button>
+                                    <button type="button" onClick={() => setTransform(p => ({ ...p, scale: Math.max(0.02, p.scale - 0.02) }))} className="w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95">
+                                        <ZoomOut className="w-5 h-5" />
+                                    </button>
+                                    <button type="button" onClick={() => setTransform(p => ({ ...p, scale: Math.min(1.5, p.scale + 0.02) }))} className="w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95">
+                                        <ZoomIn className="w-5 h-5" />
+                                    </button>
+                                    <button type="button" onClick={() => setTransform(p => ({ ...p, rotation: p.rotation + 15 }))} className="w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95">
+                                        <RotateCw className="w-5 h-5" />
+                                    </button>
+                                    <button type="button" onClick={handleReset} className="w-11 h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95">
+                                        <RefreshCw className="w-5 h-5" />
+                                    </button>
+                                </div>
+                            )}
                         </div>
                     </motion.div>
                 )}
@@ -308,10 +281,44 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                             onTouchStart={(e) => e.touches[0] && startDrag(e.touches[0].clientX, e.touches[0].clientY, canvasRef.current)}
                         />
 
-                        {/* Floating Controls */}
+                        {/* Floating Controls - FIXED with inline onClick */}
                         {userImage && !isProcessing && (
-                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-                                <ControlButtons />
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-1 sm:gap-2 bg-black/90 backdrop-blur-sm rounded-full p-1.5 sm:p-2 shadow-xl border border-white/10">
+                                <button
+                                    type="button"
+                                    onPointerDown={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, rotation: p.rotation - 15 })); }}
+                                    className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                >
+                                    <RotateCw className="w-4 h-4 sm:w-5 sm:h-5 transform -scale-x-100" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onPointerDown={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, scale: Math.max(0.02, p.scale - 0.02) })); }}
+                                    className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                >
+                                    <ZoomOut className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onPointerDown={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, scale: Math.min(1.5, p.scale + 0.02) })); }}
+                                    className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                >
+                                    <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onPointerDown={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, rotation: p.rotation + 15 })); }}
+                                    className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                >
+                                    <RotateCw className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onPointerDown={(e) => { e.stopPropagation(); handleReset(); }}
+                                    className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                >
+                                    <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+                                </button>
                             </div>
                         )}
 
