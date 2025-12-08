@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Upload, Loader2, MessageCircle, RotateCw, ZoomIn, ZoomOut, RefreshCw } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 /**
- * CANVA-STYLE TAPE CONFIGURATOR
- * On-canvas controls for mobile-friendly editing
+ * TAPE CONFIGURATOR - Simple rectangular tape
  */
 
 interface TapeConfiguratorProps {
@@ -11,79 +11,37 @@ interface TapeConfiguratorProps {
 }
 
 const CANVAS_WIDTH = 1024;
-const CANVAS_HEIGHT = 576;
+const CANVAS_HEIGHT = 300;
 
 export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const containerRef = useRef<HTMLDivElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Images
     const [tapeImage, setTapeImage] = useState<HTMLImageElement | null>(null);
-    const [processedMask, setProcessedMask] = useState<HTMLCanvasElement | null>(null);
     const [userImage, setUserImage] = useState<HTMLImageElement | null>(null);
     const [userFile, setUserFile] = useState<File | null>(null);
-
-    // States
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Transform
     const [transform, setTransform] = useState({
-        x: 350,
-        y: 350,
-        scale: 0.25,
-        rotation: -15
+        x: CANVAS_WIDTH / 2,
+        y: CANVAS_HEIGHT / 2,
+        scale: 0.3,
+        rotation: 0
     });
 
-    // Interaction states
-    const [activeAction, setActiveAction] = useState<'drag' | 'rotate' | 'scale' | null>(null);
-    const interactionStartRef = useRef({ x: 0, y: 0, value: 0 });
+    const [activeAction, setActiveAction] = useState<'drag' | null>(null);
+    const interactionStartRef = useRef({ x: 0, y: 0 });
 
-    // Process mask
-    const processMaskImage = useCallback((maskImg: HTMLImageElement): HTMLCanvasElement => {
-        const maskCanvas = document.createElement('canvas');
-        maskCanvas.width = CANVAS_WIDTH;
-        maskCanvas.height = CANVAS_HEIGHT;
-        const ctx = maskCanvas.getContext('2d')!;
-        ctx.drawImage(maskImg, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-        const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        const data = imageData.data;
-
-        for (let i = 0; i < data.length; i += 4) {
-            const r = data[i], g = data[i + 1], b = data[i + 2];
-            const isBlue = b > 150 && b > r && g > 100;
-            if (isBlue) {
-                data[i] = data[i + 1] = data[i + 2] = data[i + 3] = 255;
-            } else {
-                data[i + 3] = 0;
-            }
-        }
-        ctx.putImageData(imageData, 0, 0);
-        return maskCanvas;
-    }, []);
-
-    // Load images
+    // Load tape image
     useEffect(() => {
-        const loadImage = (src: string): Promise<HTMLImageElement> => {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.onload = () => resolve(img);
-                img.onerror = reject;
-                img.src = src;
-            });
-        };
-
-        Promise.all([loadImage('/tape.png'), loadImage('/tape-mask.png')])
-            .then(([tape, mask]) => {
-                setTapeImage(tape);
-                setProcessedMask(processMaskImage(mask));
-                setIsLoading(false);
-            })
-            .catch(() => setIsLoading(false));
-    }, [processMaskImage]);
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.onload = () => { setTapeImage(img); setIsLoading(false); };
+        img.onerror = () => setIsLoading(false);
+        img.src = '/tape.png';
+    }, []);
 
     // Render canvas
     const renderCanvas = useCallback(() => {
@@ -91,35 +49,33 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         const ctx = canvas?.getContext('2d');
         if (!canvas || !ctx || !tapeImage) return;
 
+        // Clear
         ctx.fillStyle = '#0a0a0a';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // Draw tape as background
         ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-        if (userImage && processedMask) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = CANVAS_WIDTH;
-            tempCanvas.height = CANVAS_HEIGHT;
-            const tempCtx = tempCanvas.getContext('2d')!;
-
-            tempCtx.save();
-            tempCtx.translate(transform.x, transform.y);
-            tempCtx.rotate((transform.rotation * Math.PI) / 180);
-            tempCtx.scale(transform.scale, transform.scale);
-            tempCtx.drawImage(userImage, -userImage.width / 2, -userImage.height / 2);
-            tempCtx.restore();
-
-            tempCtx.globalCompositeOperation = 'destination-in';
-            tempCtx.drawImage(processedMask, 0, 0);
-
+        // Draw user image on top with multiply blend
+        if (userImage) {
+            ctx.save();
             ctx.globalCompositeOperation = 'multiply';
-            ctx.drawImage(tempCanvas, 0, 0);
+            ctx.translate(transform.x, transform.y);
+            ctx.rotate((transform.rotation * Math.PI) / 180);
+            ctx.scale(transform.scale, transform.scale);
+            ctx.drawImage(userImage, -userImage.width / 2, -userImage.height / 2);
+            ctx.restore();
+
+            // Clip to tape bounds (simple rectangular clip)
+            ctx.globalCompositeOperation = 'destination-in';
+            ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             ctx.globalCompositeOperation = 'source-over';
         }
 
         if (userImage && userFile && onDesignReady) {
             onDesignReady(canvas.toDataURL('image/png'), userFile);
         }
-    }, [tapeImage, processedMask, userImage, userFile, transform, onDesignReady]);
+    }, [tapeImage, userImage, userFile, transform, onDesignReady]);
 
     useEffect(() => { renderCanvas(); }, [renderCanvas]);
 
@@ -135,7 +91,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
             img.onload = () => {
                 setUserImage(img);
                 setUserFile(file);
-                setTransform({ x: 350, y: 350, scale: 0.25, rotation: -15 });
+                setTransform({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.3, rotation: 0 });
                 setIsProcessing(false);
             };
             img.src = event.target?.result as string;
@@ -154,56 +110,44 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         };
     };
 
-    // Unified pointer handlers
-    const handlePointerDown = (clientX: number, clientY: number, action: 'drag' | 'rotate' | 'scale') => {
+    // Pointer handlers
+    const handlePointerDown = (clientX: number, clientY: number) => {
         if (!userImage) return;
-        setActiveAction(action);
-        const point = getCanvasPoint(clientX, clientY);
-        interactionStartRef.current = {
-            x: point.x,
-            y: point.y,
-            value: action === 'rotate' ? transform.rotation : action === 'scale' ? transform.scale : 0
-        };
+        setActiveAction('drag');
+        interactionStartRef.current = getCanvasPoint(clientX, clientY);
     };
 
     const handlePointerMove = (clientX: number, clientY: number) => {
         if (!activeAction) return;
         const point = getCanvasPoint(clientX, clientY);
         const start = interactionStartRef.current;
-
-        if (activeAction === 'drag') {
-            setTransform(prev => ({
-                ...prev,
-                x: prev.x + (point.x - start.x),
-                y: prev.y + (point.y - start.y)
-            }));
-            interactionStartRef.current = { ...start, x: point.x, y: point.y };
-        } else if (activeAction === 'rotate') {
-            const deltaX = point.x - start.x;
-            setTransform(prev => ({ ...prev, rotation: start.value + deltaX * 0.5 }));
-        } else if (activeAction === 'scale') {
-            const deltaY = start.y - point.y;
-            const newScale = Math.max(0.05, Math.min(1.5, start.value + deltaY * 0.002));
-            setTransform(prev => ({ ...prev, scale: newScale }));
-        }
+        setTransform(prev => ({
+            ...prev,
+            x: prev.x + (point.x - start.x),
+            y: prev.y + (point.y - start.y)
+        }));
+        interactionStartRef.current = point;
     };
 
     const handlePointerUp = () => setActiveAction(null);
-
-    // Reset
-    const handleReset = () => setTransform({ x: 350, y: 350, scale: 0.25, rotation: -15 });
+    const handleReset = () => setTransform({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.3, rotation: 0 });
 
     if (isLoading) {
         return (
-            <div className="bg-surface rounded-xl p-12 flex items-center justify-center min-h-[300px]">
+            <div className="bg-surface rounded-xl p-12 flex items-center justify-center min-h-[200px]">
                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
             </div>
         );
     }
 
     return (
-        <div className="space-y-4">
-            {/* Canvas with floating controls */}
+        <motion.div
+            className="space-y-4"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+        >
+            {/* Canvas */}
             <div className="bg-surface rounded-xl p-4 sm:p-6">
                 <h3 className="font-bold tracking-wide mb-4 text-sm">TAPE PREVIEW</h3>
 
@@ -221,69 +165,58 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                         width={CANVAS_WIDTH}
                         height={CANVAS_HEIGHT}
                         className="w-full h-auto bg-[#0a0a0a] rounded-xl"
-                        style={{ cursor: userImage ? (activeAction === 'drag' ? 'grabbing' : 'grab') : 'default' }}
-                        onMouseDown={(e) => { e.preventDefault(); handlePointerDown(e.clientX, e.clientY, 'drag'); }}
-                        onTouchStart={(e) => e.touches[0] && handlePointerDown(e.touches[0].clientX, e.touches[0].clientY, 'drag')}
+                        style={{ cursor: userImage ? (activeAction ? 'grabbing' : 'grab') : 'default' }}
+                        onMouseDown={(e) => { e.preventDefault(); handlePointerDown(e.clientX, e.clientY); }}
+                        onTouchStart={(e) => e.touches[0] && handlePointerDown(e.touches[0].clientX, e.touches[0].clientY)}
                     />
 
-                    {/* Floating Controls - Canva Style */}
+                    {/* Floating Controls */}
                     {userImage && !isProcessing && (
-                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-black/80 backdrop-blur-sm rounded-full p-2 shadow-xl border border-white/10">
-                            {/* Rotate Left */}
+                        <motion.div
+                            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 bg-black/80 backdrop-blur-sm rounded-full p-2 shadow-xl border border-white/10"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: 0.2 }}
+                        >
                             <button
-                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-95"
-                                onMouseDown={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, rotation: p.rotation - 15 })); }}
-                                onTouchStart={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, rotation: p.rotation - 15 })); }}
+                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                onClick={() => setTransform(p => ({ ...p, rotation: p.rotation - 15 }))}
                             >
                                 <RotateCw className="w-5 h-5 transform -scale-x-100" />
                             </button>
-
-                            {/* Smaller */}
                             <button
-                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-95"
-                                onMouseDown={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, scale: Math.max(0.05, p.scale - 0.05) })); }}
-                                onTouchStart={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, scale: Math.max(0.05, p.scale - 0.05) })); }}
+                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                onClick={() => setTransform(p => ({ ...p, scale: Math.max(0.1, p.scale - 0.05) }))}
                             >
                                 <ZoomOut className="w-5 h-5" />
                             </button>
-
-                            {/* Larger */}
                             <button
-                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-95"
-                                onMouseDown={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, scale: Math.min(1.5, p.scale + 0.05) })); }}
-                                onTouchStart={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, scale: Math.min(1.5, p.scale + 0.05) })); }}
+                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                onClick={() => setTransform(p => ({ ...p, scale: Math.min(1.5, p.scale + 0.05) }))}
                             >
                                 <ZoomIn className="w-5 h-5" />
                             </button>
-
-                            {/* Rotate Right */}
                             <button
-                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-95"
-                                onMouseDown={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, rotation: p.rotation + 15 })); }}
-                                onTouchStart={(e) => { e.stopPropagation(); setTransform(p => ({ ...p, rotation: p.rotation + 15 })); }}
+                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                onClick={() => setTransform(p => ({ ...p, rotation: p.rotation + 15 }))}
                             >
                                 <RotateCw className="w-5 h-5" />
                             </button>
-
-                            {/* Reset */}
                             <button
-                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-95"
-                                onMouseDown={(e) => { e.stopPropagation(); handleReset(); }}
-                                onTouchStart={(e) => { e.stopPropagation(); handleReset(); }}
+                                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                                onClick={handleReset}
                             >
                                 <RefreshCw className="w-5 h-5" />
                             </button>
-                        </div>
+                        </motion.div>
                     )}
 
-                    {/* Processing overlay */}
                     {isProcessing && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/80">
                             <Loader2 className="w-10 h-10 animate-spin text-primary" />
                         </div>
                     )}
 
-                    {/* Instructions */}
                     {userImage && !isProcessing && (
                         <div className="absolute top-3 left-0 right-0 text-center">
                             <p className="text-xs text-gray-400 bg-black/60 inline-block px-3 py-1 rounded-full">
@@ -294,31 +227,34 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                 </div>
             </div>
 
-            {/* Upload Button */}
+            {/* Upload & Consultation */}
             <div className="bg-surface rounded-xl p-4 sm:p-6 space-y-4">
                 <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
 
-                <button
+                <motion.button
                     onClick={() => fileInputRef.current?.click()}
                     disabled={isProcessing}
                     className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-4 rounded-xl font-bold transition-all text-base sm:text-lg"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                 >
                     <Upload className="w-5 h-5" />
                     {userImage ? 'Change Design' : 'Upload Your Design'}
-                </button>
+                </motion.button>
 
-                {/* Consultation */}
-                <a
+                <motion.a
                     href="mailto:info@alura.cz?subject=Free Design Consultation"
                     className="w-full flex items-center justify-center gap-3 border border-primary text-primary hover:bg-primary/10 py-4 rounded-xl font-bold transition-all"
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                 >
                     <MessageCircle className="w-5 h-5" />
                     Free Design Consultation
-                </a>
+                </motion.a>
                 <p className="text-xs text-gray-500 text-center">
                     Need help? We'll create the perfect design for you!
                 </p>
             </div>
-        </div>
+        </motion.div>
     );
 }
