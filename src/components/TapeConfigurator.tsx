@@ -25,7 +25,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
     const [transform, setTransform] = useState({
         x: CANVAS_WIDTH / 2,
         y: CANVAS_HEIGHT / 2,
-        scale: 0.3,
+        scale: 0.15,
         rotation: 0
     });
 
@@ -91,7 +91,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
             img.onload = () => {
                 setUserImage(img);
                 setUserFile(file);
-                setTransform({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.3, rotation: 0 });
+                setTransform({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.15, rotation: 0 });
                 setIsProcessing(false);
             };
             img.src = event.target?.result as string;
@@ -130,38 +130,49 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
     };
 
     const endDrag = () => setIsDragging(false);
-    const handleReset = () => setTransform({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.3, rotation: 0 });
 
-    // Control buttons
+    // Transform handlers - fixed to properly update state
+    const rotateLeft = () => setTransform(prev => ({ ...prev, rotation: prev.rotation - 15 }));
+    const rotateRight = () => setTransform(prev => ({ ...prev, rotation: prev.rotation + 15 }));
+    const zoomOut = () => setTransform(prev => ({ ...prev, scale: Math.max(0.02, prev.scale - 0.02) }));
+    const zoomIn = () => setTransform(prev => ({ ...prev, scale: Math.min(1.5, prev.scale + 0.02) }));
+    const handleReset = () => setTransform({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.15, rotation: 0 });
+
+    // Control buttons component
     const ControlButtons = () => (
         <div className="flex gap-1 sm:gap-2 bg-black/90 backdrop-blur-sm rounded-full p-1.5 sm:p-2 shadow-xl border border-white/10">
             <button
+                type="button"
+                onClick={rotateLeft}
                 className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                onClick={() => setTransform(p => ({ ...p, rotation: p.rotation - 15 }))}
             >
                 <RotateCw className="w-4 h-4 sm:w-5 sm:h-5 transform -scale-x-100" />
             </button>
             <button
+                type="button"
+                onClick={zoomOut}
                 className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                onClick={() => setTransform(p => ({ ...p, scale: Math.max(0.1, p.scale - 0.05) }))}
             >
                 <ZoomOut className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
             <button
+                type="button"
+                onClick={zoomIn}
                 className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                onClick={() => setTransform(p => ({ ...p, scale: Math.min(1.5, p.scale + 0.05) }))}
             >
                 <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
             <button
+                type="button"
+                onClick={rotateRight}
                 className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                onClick={() => setTransform(p => ({ ...p, rotation: p.rotation + 15 }))}
             >
                 <RotateCw className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
             <button
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                type="button"
                 onClick={handleReset}
+                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
             >
                 <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
@@ -188,10 +199,10 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                         exit={{ opacity: 0 }}
                         transition={{ duration: 0.2 }}
                     >
-                        {/* Header */}
                         <div className="flex justify-between items-center p-4 border-b border-white/10">
                             <h3 className="font-bold text-lg">Tape Preview</h3>
                             <button
+                                type="button"
                                 onClick={() => setIsFullscreen(false)}
                                 className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                             >
@@ -199,7 +210,6 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                             </button>
                         </div>
 
-                        {/* Canvas Area */}
                         <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
                             <div
                                 className="relative touch-none"
@@ -220,7 +230,6 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                                 />
                             </div>
 
-                            {/* Controls in fullscreen */}
                             {userImage && <ControlButtons />}
                         </div>
                     </motion.div>
@@ -239,6 +248,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                         <div className="flex items-center gap-2">
                             <h3 className="font-bold tracking-wide text-sm">TAPE PREVIEW</h3>
                             <button
+                                type="button"
                                 onClick={() => setShowHelp(!showHelp)}
                                 className="p-1 hover:bg-white/10 rounded-full transition-colors"
                             >
@@ -246,6 +256,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                             </button>
                         </div>
                         <button
+                            type="button"
                             onClick={() => setIsFullscreen(true)}
                             className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
                         >
@@ -257,17 +268,22 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                     <AnimatePresence>
                         {showHelp && (
                             <motion.div
-                                className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-xl text-sm"
+                                className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-xl text-sm space-y-3"
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
                             >
-                                <p className="text-gray-300 mb-2">
+                                <p className="text-gray-300">
                                     <strong>📋 This design will repeat across the whole tape!</strong>
                                 </p>
                                 <p className="text-gray-400 text-xs">
-                                    Your uploaded design will be printed repeatedly along the entire length of the tape.
-                                    If anything doesn't look right or you need help, use the <strong className="text-primary">Free Design Consultation</strong> button below!
+                                    <strong>🎨 Maximum 3 colors per tape</strong> — for best print quality, keep your design simple with up to 3 colors.
+                                </p>
+                                <p className="text-gray-400 text-xs">
+                                    <strong>✨ Simple designs work best</strong> — logos with clean lines and solid colors produce the sharpest results.
+                                </p>
+                                <p className="text-gray-400 text-xs">
+                                    Need help? Use the <strong className="text-primary">Free Design Consultation</strong> button below!
                                 </p>
                             </motion.div>
                         )}
@@ -292,7 +308,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                             onTouchStart={(e) => e.touches[0] && startDrag(e.touches[0].clientX, e.touches[0].clientY, canvasRef.current)}
                         />
 
-                        {/* Floating Controls on main canvas */}
+                        {/* Floating Controls */}
                         {userImage && !isProcessing && (
                             <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
                                 <ControlButtons />
@@ -320,6 +336,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
 
                     <motion.button
+                        type="button"
                         onClick={() => fileInputRef.current?.click()}
                         disabled={isProcessing}
                         className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-4 rounded-xl font-bold transition-all text-base sm:text-lg"
