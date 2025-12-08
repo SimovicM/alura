@@ -22,14 +22,26 @@ export default function About() {
     return (
         <section id="about" className="py-32 px-6 bg-surface">
             <div className="max-w-6xl mx-auto">
-                <div className="text-center mb-20">
-                    <h2 className="text-5xl md:text-7xl font-modak text-white mb-6">
-                        Your Design.<br />Your Performance.
+                {/* About Alura Section */}
+                <div className="text-center mb-24">
+                    <h2 className="text-5xl md:text-7xl font-modak text-white mb-8">
+                        About Alura
                     </h2>
-                    <p className="text-xl text-gray-400 max-w-3xl mx-auto font-light leading-relaxed">
-                        At Alura, we believe your athletic tape should be as unique as your game.
-                        Upload any image, logo, or design and we'll print it on premium kinesiology tape.
+                    <p className="text-lg md:text-xl text-gray-400 max-w-4xl mx-auto leading-relaxed">
+                        Alura is a Czech brand redefining how athletes express themselves on the pitch.
+                        Specializing in fully custom, high-quality sports tapes, Alura gives every player
+                        the freedom to showcase their identity, style, and confidence in every match.
+                        Trusted and verified by multiple athletes, our tapes combine performance-ready
+                        durability with limitless personalization. With Alura, your game isn't just played
+                        — it's uniquely yours.
                     </p>
+                </div>
+
+                {/* Features */}
+                <div className="text-center mb-16">
+                    <h3 className="text-4xl md:text-5xl font-modak text-white mb-6">
+                        Your Design.<br />Your Performance.
+                    </h3>
                 </div>
 
                 <div className="grid md:grid-cols-3 gap-12">

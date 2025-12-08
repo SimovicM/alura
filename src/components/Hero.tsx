@@ -11,14 +11,6 @@ export default function Hero() {
     return (
         <section id="hero" className="min-h-screen flex flex-col items-center justify-center relative px-6 pt-20">
             <div className="relative z-10 text-center max-w-4xl">
-                {/* Logo */}
-                <img
-                    src="/alura-logo.png"
-                    alt="Alura"
-                    className="mx-auto mb-12"
-                    style={{ maxWidth: '400px', width: '80%' }}
-                />
-
                 {/* Headline */}
                 <h1 className="text-6xl md:text-8xl font-modak text-white mb-6 tracking-tight">
                     100% Custom<br />Athletic Tapes
