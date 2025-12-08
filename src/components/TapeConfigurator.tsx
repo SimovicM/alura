@@ -1,16 +1,15 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, ZoomIn, ZoomOut, RotateCw, RotateCcw, RefreshCw, X, Loader2, MessageCircle } from 'lucide-react';
+import { Upload, ZoomIn, ZoomOut, RotateCw, RotateCcw, RefreshCw, Loader2, MessageCircle } from 'lucide-react';
 
 /**
- * TAPE CONFIGURATOR
- * User's design is drawn behind the tape, positioned to show through the tape area
+ * WORKING TAPE CONFIGURATOR
+ * Properly processes the mask to clip user's design to tape surface
  */
 
 interface TapeConfiguratorProps {
     onDesignReady?: (imageDataUrl: string, file: File) => void;
 }
 
-// Canvas dimensions
 const CANVAS_WIDTH = 1024;
 const CANVAS_HEIGHT = 576;
 
@@ -20,98 +19,150 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
 
     // Images
     const [tapeImage, setTapeImage] = useState<HTMLImageElement | null>(null);
+    const [processedMask, setProcessedMask] = useState<HTMLCanvasElement | null>(null);
     const [userImage, setUserImage] = useState<HTMLImageElement | null>(null);
     const [userFile, setUserFile] = useState<File | null>(null);
 
-    // Loading states
+    // States
     const [isLoading, setIsLoading] = useState(true);
     const [isProcessing, setIsProcessing] = useState(false);
 
-    // Transform state - position aligned to the tape's printable area
+    // Transform - positioned to align with the tape's printable area
     const [transform, setTransform] = useState({
-        x: 380,  // Adjusted to tape area
-        y: 320,
-        scale: 0.3,
-        rotation: -18  // Slight angle to match tape perspective
+        x: 350,
+        y: 350,
+        scale: 0.25,
+        rotation: -15
     });
 
     // Drag state
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0, imgX: 0, imgY: 0 });
 
-    // Load tape image on mount
-    useEffect(() => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = () => {
-            setTapeImage(img);
-            setIsLoading(false);
-        };
-        img.onerror = () => {
-            console.error('Failed to load tape image');
-            setIsLoading(false);
-        };
-        img.src = '/tape.png';
+    // Process the mask image to create a proper alpha mask
+    const processMaskImage = useCallback((maskImg: HTMLImageElement): HTMLCanvasElement => {
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = CANVAS_WIDTH;
+        maskCanvas.height = CANVAS_HEIGHT;
+        const ctx = maskCanvas.getContext('2d')!;
+
+        // Draw the mask image
+        ctx.drawImage(maskImg, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // Get pixel data
+        const imageData = ctx.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        const data = imageData.data;
+
+        // Convert: blue pixels -> opaque white, other pixels -> transparent
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+
+            // Detect the blue color from the mask (#6B93B8 approximately)
+            // Blue has higher B value than R, and reasonable G
+            const isBlue = b > 150 && b > r && g > 100;
+
+            if (isBlue) {
+                // Make opaque white (this will be the visible area)
+                data[i] = 255;     // R
+                data[i + 1] = 255; // G
+                data[i + 2] = 255; // B
+                data[i + 3] = 255; // A - fully opaque
+            } else {
+                // Make transparent (this will be hidden)
+                data[i + 3] = 0;   // A - fully transparent
+            }
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        return maskCanvas;
     }, []);
 
-    // Render canvas
+    // Load images on mount
+    useEffect(() => {
+        const loadImage = (src: string): Promise<HTMLImageElement> => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = reject;
+                img.src = src;
+            });
+        };
+
+        Promise.all([
+            loadImage('/tape.png'),
+            loadImage('/tape-mask.png')
+        ]).then(([tape, mask]) => {
+            setTapeImage(tape);
+            setProcessedMask(processMaskImage(mask));
+            setIsLoading(false);
+        }).catch(err => {
+            console.error('Failed to load images:', err);
+            setIsLoading(false);
+        });
+    }, [processMaskImage]);
+
+    // Render the canvas
     const renderCanvas = useCallback(() => {
         const canvas = canvasRef.current;
         const ctx = canvas?.getContext('2d');
-        if (!canvas || !ctx) return;
+        if (!canvas || !ctx || !tapeImage) return;
 
-        // Clear canvas with dark background
+        // Clear with dark background
         ctx.fillStyle = '#0a0a0a';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-        // Draw user's image FIRST (behind the tape)
-        if (userImage) {
-            ctx.save();
-            ctx.translate(transform.x, transform.y);
-            ctx.rotate((transform.rotation * Math.PI) / 180);
-            ctx.scale(transform.scale, transform.scale);
+        // Draw the tape as base
+        ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-            // Draw centered
-            ctx.drawImage(
+        // If user has an image and we have a processed mask
+        if (userImage && processedMask) {
+            // Create a temporary canvas for the masked user design
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = CANVAS_WIDTH;
+            tempCanvas.height = CANVAS_HEIGHT;
+            const tempCtx = tempCanvas.getContext('2d')!;
+
+            // Draw user's image with transforms
+            tempCtx.save();
+            tempCtx.translate(transform.x, transform.y);
+            tempCtx.rotate((transform.rotation * Math.PI) / 180);
+            tempCtx.scale(transform.scale, transform.scale);
+            tempCtx.drawImage(
                 userImage,
                 -userImage.width / 2,
-                -userImage.height / 2,
-                userImage.width,
-                userImage.height
+                -userImage.height / 2
             );
-            ctx.restore();
-        }
+            tempCtx.restore();
 
-        // Draw the tape on top - using multiply blend mode so design shows through
-        if (tapeImage) {
+            // Apply the processed mask (only show design where mask is opaque)
+            tempCtx.globalCompositeOperation = 'destination-in';
+            tempCtx.drawImage(processedMask, 0, 0);
+
+            // Draw the masked design onto the main canvas with multiply blend
             ctx.globalCompositeOperation = 'multiply';
-            ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-            ctx.globalCompositeOperation = 'source-over';
+            ctx.drawImage(tempCanvas, 0, 0);
 
-            // Draw tape again normally for the white parts
-            ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            // Reset composite operation
+            ctx.globalCompositeOperation = 'source-over';
         }
 
         // Notify parent
         if (userImage && userFile && onDesignReady) {
-            const dataUrl = canvas.toDataURL('image/png');
-            onDesignReady(dataUrl, userFile);
+            onDesignReady(canvas.toDataURL('image/png'), userFile);
         }
-    }, [tapeImage, userImage, userFile, transform, onDesignReady]);
+    }, [tapeImage, processedMask, userImage, userFile, transform, onDesignReady]);
 
     useEffect(() => {
         renderCanvas();
     }, [renderCanvas]);
 
-    // Handle file upload
+    // File upload handler
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file) return;
-
-        if (!file.type.startsWith('image/')) {
-            alert('Please select an image file');
-            return;
-        }
+        if (!file || !file.type.startsWith('image/')) return;
 
         setIsProcessing(true);
 
@@ -121,15 +172,12 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
             img.onload = () => {
                 setUserImage(img);
                 setUserFile(file);
-
-                // Reset transform
                 setTransform({
-                    x: 380,
-                    y: 320,
-                    scale: 0.3,
-                    rotation: -18
+                    x: 350,
+                    y: 350,
+                    scale: 0.25,
+                    rotation: -15
                 });
-
                 setIsProcessing(false);
             };
             img.src = event.target?.result as string;
@@ -141,104 +189,68 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
     const handleRemove = () => {
         setUserImage(null);
         setUserFile(null);
-        if (fileInputRef.current) {
-            fileInputRef.current.value = '';
-        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
     };
 
-    // Reset transforms
+    // Reset transform
     const handleReset = () => {
-        setTransform({
-            x: 380,
-            y: 320,
-            scale: 0.3,
-            rotation: -18
-        });
+        setTransform({ x: 350, y: 350, scale: 0.25, rotation: -15 });
     };
 
-    // Get pointer position relative to canvas
+    // Canvas coordinate helper
     const getCanvasPoint = (clientX: number, clientY: number) => {
         const canvas = canvasRef.current;
         if (!canvas) return { x: 0, y: 0 };
-
         const rect = canvas.getBoundingClientRect();
-        const scaleX = CANVAS_WIDTH / rect.width;
-        const scaleY = CANVAS_HEIGHT / rect.height;
-
         return {
-            x: (clientX - rect.left) * scaleX,
-            y: (clientY - rect.top) * scaleY
+            x: (clientX - rect.left) * (CANVAS_WIDTH / rect.width),
+            y: (clientY - rect.top) * (CANVAS_HEIGHT / rect.height)
         };
     };
 
     // Mouse handlers
-    const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const handleMouseDown = (e: React.MouseEvent) => {
         if (!userImage) return;
         e.preventDefault();
-
         const point = getCanvasPoint(e.clientX, e.clientY);
         setIsDragging(true);
-        dragStartRef.current = {
-            x: point.x,
-            y: point.y,
-            imgX: transform.x,
-            imgY: transform.y
-        };
+        dragStartRef.current = { x: point.x, y: point.y, imgX: transform.x, imgY: transform.y };
     };
 
-    const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    const handleMouseMove = (e: React.MouseEvent) => {
         if (!isDragging) return;
-
         const point = getCanvasPoint(e.clientX, e.clientY);
-        const deltaX = point.x - dragStartRef.current.x;
-        const deltaY = point.y - dragStartRef.current.y;
-
         setTransform(prev => ({
             ...prev,
-            x: dragStartRef.current.imgX + deltaX,
-            y: dragStartRef.current.imgY + deltaY
+            x: dragStartRef.current.imgX + (point.x - dragStartRef.current.x),
+            y: dragStartRef.current.imgY + (point.y - dragStartRef.current.y)
         }));
     };
 
-    const handleMouseUp = () => {
-        setIsDragging(false);
-    };
+    const handleMouseUp = () => setIsDragging(false);
 
     // Touch handlers
-    const handleTouchStart = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const handleTouchStart = (e: React.TouchEvent) => {
         if (!userImage || e.touches.length !== 1) return;
-
         const touch = e.touches[0];
         const point = getCanvasPoint(touch.clientX, touch.clientY);
         setIsDragging(true);
-        dragStartRef.current = {
-            x: point.x,
-            y: point.y,
-            imgX: transform.x,
-            imgY: transform.y
-        };
+        dragStartRef.current = { x: point.x, y: point.y, imgX: transform.x, imgY: transform.y };
     };
 
-    const handleTouchMove = (e: React.TouchEvent<HTMLCanvasElement>) => {
+    const handleTouchMove = (e: React.TouchEvent) => {
         if (!isDragging || e.touches.length !== 1) return;
-
         const touch = e.touches[0];
         const point = getCanvasPoint(touch.clientX, touch.clientY);
-        const deltaX = point.x - dragStartRef.current.x;
-        const deltaY = point.y - dragStartRef.current.y;
-
         setTransform(prev => ({
             ...prev,
-            x: dragStartRef.current.imgX + deltaX,
-            y: dragStartRef.current.imgY + deltaY
+            x: dragStartRef.current.imgX + (point.x - dragStartRef.current.x),
+            y: dragStartRef.current.imgY + (point.y - dragStartRef.current.y)
         }));
     };
 
-    const handleTouchEnd = () => {
-        setIsDragging(false);
-    };
+    const handleTouchEnd = () => setIsDragging(false);
 
-    // Loading state
     if (isLoading) {
         return (
             <div className="bg-surface rounded-xl p-12 flex items-center justify-center min-h-[400px]">
@@ -254,19 +266,8 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         <div className="space-y-6">
             {/* Canvas Preview */}
             <div className="bg-surface rounded-xl p-6">
-                <div className="flex justify-between items-center mb-4">
-                    <h3 className="font-bold tracking-wide">TAPE PREVIEW</h3>
-                    {userImage && (
-                        <button
-                            onClick={handleRemove}
-                            className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
-                        >
-                            <X className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
+                <h3 className="font-bold tracking-wide mb-4">TAPE PREVIEW</h3>
 
-                {/* Canvas */}
                 <div className="relative rounded-xl overflow-hidden">
                     <canvas
                         ref={canvasRef}
@@ -286,21 +287,16 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                         onTouchEnd={handleTouchEnd}
                     />
 
-                    {/* Processing overlay */}
                     {isProcessing && (
                         <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-20">
-                            <div className="text-center">
-                                <Loader2 className="w-10 h-10 animate-spin text-primary mx-auto mb-3" />
-                                <p className="text-sm text-gray-400">Processing your design...</p>
-                            </div>
+                            <Loader2 className="w-10 h-10 animate-spin text-primary" />
                         </div>
                     )}
 
-                    {/* Instructions */}
                     {userImage && !isProcessing && (
                         <div className="absolute bottom-3 left-0 right-0 text-center">
                             <p className="text-xs text-gray-400 bg-black/60 inline-block px-3 py-1 rounded-full">
-                                Drag to move • Use buttons to resize & rotate
+                                Drag to move • Use buttons below to adjust
                             </p>
                         </div>
                     )}
@@ -309,86 +305,80 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
 
             {/* Controls */}
             <div className="bg-surface rounded-xl p-6 space-y-5">
-                {/* Upload button */}
-                <div>
-                    <input
-                        ref={fileInputRef}
-                        type="file"
-                        accept="image/*"
-                        onChange={handleFileChange}
-                        className="hidden"
-                    />
-                    <button
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={isProcessing}
-                        className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-4 rounded-xl font-bold transition-all text-lg"
-                    >
-                        <Upload className="w-5 h-5" />
-                        {userImage ? 'Change Design' : 'Upload Your Design'}
-                    </button>
-                </div>
+                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
 
-                {/* Transform controls */}
+                <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={isProcessing}
+                    className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-4 rounded-xl font-bold transition-all text-lg"
+                >
+                    <Upload className="w-5 h-5" />
+                    {userImage ? 'Change Design' : 'Upload Your Design'}
+                </button>
+
                 {userImage && !isProcessing && (
                     <>
-                        {/* Size Controls */}
+                        {/* Size */}
                         <div>
                             <label className="block text-xs font-bold mb-2 text-gray-400 tracking-wide">
                                 SIZE ({Math.round(transform.scale * 100)}%)
                             </label>
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => setTransform(prev => ({ ...prev, scale: Math.max(0.05, prev.scale - 0.05) }))}
-                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                                    onClick={() => setTransform(p => ({ ...p, scale: Math.max(0.05, p.scale - 0.05) }))}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-lg"
                                 >
-                                    <ZoomOut className="w-4 h-4" />
-                                    <span className="text-sm font-medium">Smaller</span>
+                                    <ZoomOut className="w-4 h-4" /> Smaller
                                 </button>
                                 <button
-                                    onClick={() => setTransform(prev => ({ ...prev, scale: Math.min(1.5, prev.scale + 0.05) }))}
-                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                                    onClick={() => setTransform(p => ({ ...p, scale: Math.min(1, p.scale + 0.05) }))}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-lg"
                                 >
-                                    <ZoomIn className="w-4 h-4" />
-                                    <span className="text-sm font-medium">Larger</span>
+                                    <ZoomIn className="w-4 h-4" /> Larger
                                 </button>
                             </div>
                         </div>
 
-                        {/* Rotation Controls */}
+                        {/* Rotation */}
                         <div>
                             <label className="block text-xs font-bold mb-2 text-gray-400 tracking-wide">
                                 ROTATION ({transform.rotation}°)
                             </label>
                             <div className="flex gap-2">
                                 <button
-                                    onClick={() => setTransform(prev => ({ ...prev, rotation: prev.rotation - 5 }))}
-                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                                    onClick={() => setTransform(p => ({ ...p, rotation: p.rotation - 5 }))}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-lg"
                                 >
-                                    <RotateCcw className="w-4 h-4" />
-                                    <span className="text-sm font-medium">-5°</span>
+                                    <RotateCcw className="w-4 h-4" /> -5°
                                 </button>
                                 <button
-                                    onClick={() => setTransform(prev => ({ ...prev, rotation: prev.rotation + 5 }))}
-                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
+                                    onClick={() => setTransform(p => ({ ...p, rotation: p.rotation + 5 }))}
+                                    className="flex-1 flex items-center justify-center gap-2 py-3 bg-white/5 hover:bg-white/10 rounded-lg"
                                 >
-                                    <RotateCw className="w-4 h-4" />
-                                    <span className="text-sm font-medium">+5°</span>
+                                    <RotateCw className="w-4 h-4" /> +5°
                                 </button>
                             </div>
                         </div>
 
-                        {/* Reset button */}
-                        <button
-                            onClick={handleReset}
-                            className="w-full flex items-center justify-center gap-2 py-3 border border-white/10 hover:bg-white/5 rounded-lg transition-colors"
-                        >
-                            <RefreshCw className="w-4 h-4" />
-                            <span className="text-sm font-medium">Reset Position & Size</span>
-                        </button>
+                        {/* Reset & Remove */}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={handleReset}
+                                className="flex-1 flex items-center justify-center gap-2 py-3 border border-white/10 hover:bg-white/5 rounded-lg"
+                            >
+                                <RefreshCw className="w-4 h-4" /> Reset
+                            </button>
+                            <button
+                                onClick={handleRemove}
+                                className="flex-1 py-3 border border-red-500/30 text-red-400 hover:bg-red-500/10 rounded-lg"
+                            >
+                                Remove
+                            </button>
+                        </div>
                     </>
                 )}
 
-                {/* Free Consultation Button */}
+                {/* Consultation */}
                 <div className="pt-4 border-t border-white/10">
                     <a
                         href="mailto:info@alura.cz?subject=Free Design Consultation"
