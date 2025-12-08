@@ -1,21 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Plus, Minus, ShoppingCart, X, Loader2, CheckCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Minus, ShoppingCart, X, Loader2, CheckCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TapeConfigurator from '../components/TapeConfigurator';
 import { savePreorder } from '../lib/firebase';
-import { uploadToImgBB, uploadBase64ToImgBB, generateUniqueId } from '../lib/imgbb';
+import { uploadBase64ToImgBB, generateUniqueId } from '../lib/imgbb';
 
 const PRICE_PER_ROLL = 250;
 
-interface DesignItem {
-    id: string;
-    url: string;
-    file: File;
-}
-
 export default function CustomizerPage() {
-    const [designs, setDesigns] = useState<DesignItem[]>([]);
+    const [currentDesign, setCurrentDesign] = useState<{ url: string } | null>(null);
     const [quantity, setQuantity] = useState(1);
     const [showPreorderModal, setShowPreorderModal] = useState(false);
     const [email, setEmail] = useState('');
@@ -24,32 +18,12 @@ export default function CustomizerPage() {
     const [submitError, setSubmitError] = useState('');
     const [uploadProgress, setUploadProgress] = useState('');
 
-    const handleDesignReady = (imageDataUrl: string, file: File) => {
-        const newDesign: DesignItem = {
-            id: generateUniqueId(),
-            url: imageDataUrl,
-            file
-        };
-        setDesigns(prev => {
-            // Check if this file already exists (same name)
-            const existingIndex = prev.findIndex(d => d.file.name === file.name);
-            if (existingIndex >= 0) {
-                // Update existing design
-                const updated = [...prev];
-                updated[existingIndex] = newDesign;
-                return updated;
-            }
-            // Add new design
-            return [...prev, newDesign];
-        });
-    };
-
-    const removeDesign = (id: string) => {
-        setDesigns(prev => prev.filter(d => d.id !== id));
+    const handleDesignReady = (imageDataUrl: string) => {
+        setCurrentDesign({ url: imageDataUrl });
     };
 
     const handlePreorder = () => {
-        if (designs.length === 0) {
+        if (!currentDesign) {
             alert('Please upload at least one design');
             return;
         }
@@ -62,8 +36,8 @@ export default function CustomizerPage() {
             return;
         }
 
-        if (designs.length === 0) {
-            setSubmitError('No designs found. Please upload at least one design.');
+        if (!currentDesign) {
+            setSubmitError('No design found. Please upload at least one design.');
             return;
         }
 
@@ -71,34 +45,21 @@ export default function CustomizerPage() {
         setSubmitError('');
 
         try {
-            const uploadedDesigns = [];
+            const uniqueId = generateUniqueId();
 
-            for (let i = 0; i < designs.length; i++) {
-                const design = designs[i];
-                const uniqueId = design.id;
+            setUploadProgress('Uploading your design...');
 
-                setUploadProgress(`Uploading design ${i + 1} of ${designs.length}...`);
-
-                // Upload original design to ImgBB
-                const originalImageUrl = await uploadToImgBB(design.file, uniqueId);
-
-                // Upload tape preview to ImgBB
-                const tapePreviewUrl = await uploadBase64ToImgBB(design.url, `${uniqueId}_tape`);
-
-                uploadedDesigns.push({
-                    originalImageUrl,
-                    tapePreviewUrl
-                });
-            }
+            // Upload the final tape preview to ImgBB
+            const tapePreviewUrl = await uploadBase64ToImgBB(currentDesign.url, `${uniqueId}_tape`);
 
             // Save to Firebase
             setUploadProgress('Saving your preorder...');
             const result = await savePreorder({
                 email,
-                originalImageUrl: uploadedDesigns.map(d => d.originalImageUrl).join(', '),
-                tapePreviewUrl: uploadedDesigns.map(d => d.tapePreviewUrl).join(', '),
+                originalImageUrl: tapePreviewUrl, // We only have the final composite now
+                tapePreviewUrl,
                 quantity,
-                total: quantity * PRICE_PER_ROLL * designs.length
+                total: quantity * PRICE_PER_ROLL
             });
 
             if (result.success) {
@@ -120,8 +81,7 @@ export default function CustomizerPage() {
         setIsSubmitting(false);
     };
 
-    const totalRolls = quantity * designs.length;
-    const total = totalRolls * PRICE_PER_ROLL;
+    const total = quantity * PRICE_PER_ROLL;
 
     return (
         <>
@@ -162,16 +122,8 @@ export default function CustomizerPage() {
                                     {/* Order Summary */}
                                     <div className="bg-black/30 rounded-xl p-4 mb-6 space-y-2">
                                         <div className="flex justify-between text-sm text-gray-400">
-                                            <span>Designs</span>
-                                            <span>{designs.length}</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm text-gray-400">
-                                            <span>Quantity per design</span>
-                                            <span>{quantity}</span>
-                                        </div>
-                                        <div className="flex justify-between text-sm text-gray-400">
-                                            <span>Total rolls</span>
-                                            <span>{totalRolls}</span>
+                                            <span>Quantity</span>
+                                            <span>{quantity} roll{quantity > 1 ? 's' : ''}</span>
                                         </div>
                                         <div className="flex justify-between text-lg font-bold pt-2 border-t border-white/10">
                                             <span>Total</span>
@@ -242,7 +194,7 @@ export default function CustomizerPage() {
                             Design Your Tape
                         </h1>
                         <p className="text-lg text-gray-400">
-                            Upload your logo or image, position it, and preorder. You can add multiple designs!
+                            Upload your images, position them, and preorder. Add multiple images to one tape!
                         </p>
                     </div>
 
@@ -250,32 +202,6 @@ export default function CustomizerPage() {
                         {/* Left: Configurator */}
                         <div className="lg:col-span-3">
                             <TapeConfigurator onDesignReady={handleDesignReady} />
-
-                            {/* Uploaded Designs Gallery */}
-                            {designs.length > 0 && (
-                                <div className="mt-6 bg-surface rounded-xl p-4 sm:p-6">
-                                    <h3 className="font-bold tracking-wide text-sm mb-4">
-                                        YOUR DESIGNS ({designs.length})
-                                    </h3>
-                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                        {designs.map((design) => (
-                                            <div key={design.id} className="relative group">
-                                                <img
-                                                    src={design.url}
-                                                    alt="Design preview"
-                                                    className="w-full h-24 object-cover rounded-lg bg-black/50"
-                                                />
-                                                <button
-                                                    onClick={() => removeDesign(design.id)}
-                                                    className="absolute top-2 right-2 p-1.5 bg-red-500/80 hover:bg-red-500 rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
-                                                >
-                                                    <Trash2 className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
 
                         {/* Right: Order Panel */}
@@ -283,16 +209,10 @@ export default function CustomizerPage() {
                             <div className="bg-surface rounded-xl p-6 space-y-6 sticky top-24">
                                 <h3 className="font-bold tracking-wide text-lg">PREORDER</h3>
 
-                                {/* Designs count */}
-                                <div className="flex justify-between items-center text-sm">
-                                    <span className="text-gray-400">Designs uploaded</span>
-                                    <span className="font-bold text-lg">{designs.length}</span>
-                                </div>
-
                                 {/* Quantity */}
                                 <div>
                                     <label className="block text-xs font-bold mb-3 text-gray-400 tracking-wide">
-                                        QUANTITY PER DESIGN
+                                        QUANTITY
                                     </label>
                                     <div className="flex items-center gap-4">
                                         <button
@@ -317,27 +237,23 @@ export default function CustomizerPage() {
                                         <span>Price per roll</span>
                                         <span className="font-medium">{PRICE_PER_ROLL} Kč</span>
                                     </div>
-                                    <div className="flex justify-between text-gray-400">
-                                        <span>Total rolls</span>
-                                        <span className="font-medium">{totalRolls || '—'}</span>
-                                    </div>
                                     <div className="flex justify-between text-2xl font-bold">
                                         <span>Total</span>
-                                        <span className="text-primary">{total || 0} Kč</span>
+                                        <span className="text-primary">{total} Kč</span>
                                     </div>
                                 </div>
 
                                 {/* Preorder Button */}
                                 <button
                                     onClick={handlePreorder}
-                                    disabled={designs.length === 0}
+                                    disabled={!currentDesign}
                                     className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold transition-all text-lg"
                                 >
                                     <ShoppingCart className="w-5 h-5" />
                                     Preorder Now
                                 </button>
 
-                                {designs.length === 0 && (
+                                {!currentDesign && (
                                     <p className="text-sm text-gray-500 text-center">
                                         Upload a design to enable preorder
                                     </p>
