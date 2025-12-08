@@ -7,27 +7,12 @@ import Cart from './components/Cart';
 import Checkout from './components/Checkout';
 import Footer from './components/Footer';
 import CustomizerPage from './pages/CustomizerPage';
-import type { CartItem, CustomDesign } from './types';
-
-// Updated pricing: 250 CZK per roll
-const PRICE_PER_ROLL = 250;
+import type { CartItem } from './types';
 
 function App() {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isCheckout, setIsCheckout] = useState(false);
-
-  const handleAddToCart = (design: CustomDesign, quantity: number) => {
-    const newItem: CartItem = {
-      id: design.id,
-      design,
-      quantity,
-      price: PRICE_PER_ROLL,
-    };
-
-    setCartItems([...cartItems, newItem]);
-    setIsCartOpen(true);
-  };
 
   const handleUpdateQuantity = (id: string, quantity: number) => {
     setCartItems(cartItems.map(item =>
@@ -82,10 +67,7 @@ function App() {
 
         {/* Dedicated Configurator Page */}
         <Route path="/customize" element={
-          <CustomizerPage
-            onAddToCart={handleAddToCart}
-            onOpenCart={() => setIsCartOpen(true)}
-          />
+          <CustomizerPage />
         } />
       </Routes>
 
