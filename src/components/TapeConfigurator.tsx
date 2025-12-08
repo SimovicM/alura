@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Loader2, MessageCircle, RotateCw, ZoomIn, ZoomOut, RefreshCw, Maximize2, HelpCircle, X, Plus, Trash2, Layers } from 'lucide-react';
+import { Upload, Loader2, MessageCircle, RotateCw, ZoomIn, ZoomOut, RefreshCw, Maximize2, HelpCircle, X, Plus, Trash2 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 interface TapeConfiguratorProps {
@@ -31,10 +31,15 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
     const [isProcessing, setIsProcessing] = useState(false);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showHelp, setShowHelp] = useState(false);
-    const [showLayers, setShowLayers] = useState(false);
 
     const [isDragging, setIsDragging] = useState(false);
     const dragStartRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
+    const layersRef = useRef<ImageLayer[]>([]);
+
+    // Keep layersRef in sync
+    useEffect(() => {
+        layersRef.current = layers;
+    }, [layers]);
 
     const selectedLayer = layers.find(l => l.id === selectedLayerId);
 
@@ -47,7 +52,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         img.src = '/tape.png';
     }, []);
 
-    // Render to a specific canvas
+    // Render to canvas
     const renderToCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
         if (!canvas || !tapeImage) return;
         const ctx = canvas.getContext('2d');
@@ -59,7 +64,8 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
         // Draw all layers
-        layers.forEach(layer => {
+        const currentLayers = layersRef.current;
+        currentLayers.forEach(layer => {
             ctx.save();
             ctx.globalCompositeOperation = 'multiply';
             ctx.translate(layer.x, layer.y);
@@ -70,39 +76,44 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         });
 
         // Clip to tape shape
-        if (layers.length > 0) {
+        if (currentLayers.length > 0) {
             ctx.globalCompositeOperation = 'destination-in';
             ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             ctx.globalCompositeOperation = 'source-over';
         }
 
-        // Draw selection indicator for selected layer
-        if (selectedLayer) {
+        // Draw selection indicator
+        const selected = currentLayers.find(l => l.id === selectedLayerId);
+        if (selected) {
             ctx.save();
-            ctx.strokeStyle = '#00ff00';
-            ctx.lineWidth = 2;
-            ctx.setLineDash([5, 5]);
-            ctx.translate(selectedLayer.x, selectedLayer.y);
-            ctx.rotate((selectedLayer.rotation * Math.PI) / 180);
-            const size = Math.max(selectedLayer.image.width, selectedLayer.image.height) * selectedLayer.scale;
-            ctx.strokeRect(-size / 2, -size / 2, size, size);
+            ctx.strokeStyle = '#22c55e';
+            ctx.lineWidth = 3;
+            ctx.setLineDash([8, 4]);
+            ctx.translate(selected.x, selected.y);
+            ctx.rotate((selected.rotation * Math.PI) / 180);
+            const w = selected.image.width * selected.scale;
+            const h = selected.image.height * selected.scale;
+            ctx.strokeRect(-w / 2, -h / 2, w, h);
             ctx.restore();
         }
-    }, [tapeImage, layers, selectedLayer]);
+    }, [tapeImage, selectedLayerId]);
 
-    // Render both canvases
+    // Render on changes
     useEffect(() => {
         renderToCanvas(canvasRef.current);
-        if (isFullscreen) {
-            renderToCanvas(fullscreenCanvasRef.current);
-        }
+        renderToCanvas(fullscreenCanvasRef.current);
 
         if (layers.length > 0 && onDesignReady && canvasRef.current) {
             onDesignReady(canvasRef.current.toDataURL('image/png'), layers[0]?.file || null);
         }
-    }, [renderToCanvas, isFullscreen, layers, onDesignReady]);
+    }, [renderToCanvas, layers, onDesignReady]);
 
-    // File upload
+    // Trigger file input
+    const triggerFileInput = () => {
+        fileInputRef.current?.click();
+    };
+
+    // File upload handler
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !file.type.startsWith('image/')) return;
@@ -129,31 +140,44 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         };
         reader.readAsDataURL(file);
 
-        // Reset input so same file can be uploaded again
-        if (fileInputRef.current) fileInputRef.current.value = '';
+        // Reset input
+        e.target.value = '';
     };
 
-    // Update selected layer
-    const updateSelectedLayer = (updates: Partial<ImageLayer>) => {
+    // Layer manipulation functions
+    const rotateLeft = () => {
         if (!selectedLayerId) return;
-        setLayers(prev => prev.map(layer =>
-            layer.id === selectedLayerId ? { ...layer, ...updates } : layer
-        ));
+        setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, rotation: l.rotation - 15 } : l));
     };
 
-    // Delete selected layer
-    const deleteSelectedLayer = () => {
+    const rotateRight = () => {
         if (!selectedLayerId) return;
-        setLayers(prev => prev.filter(layer => layer.id !== selectedLayerId));
-        setSelectedLayerId(layers.length > 1 ? layers[0].id : null);
+        setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, rotation: l.rotation + 15 } : l));
     };
 
-    // Reset selected layer position
-    const resetSelectedLayer = () => {
-        updateSelectedLayer({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.15, rotation: 0 });
+    const zoomIn = () => {
+        if (!selectedLayerId) return;
+        setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, scale: Math.min(2, l.scale + 0.03) } : l));
     };
 
-    // Get canvas coordinates from pointer
+    const zoomOut = () => {
+        if (!selectedLayerId) return;
+        setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, scale: Math.max(0.01, l.scale - 0.03) } : l));
+    };
+
+    const resetLayer = () => {
+        if (!selectedLayerId) return;
+        setLayers(prev => prev.map(l => l.id === selectedLayerId ? { ...l, x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.15, rotation: 0 } : l));
+    };
+
+    const deleteLayer = () => {
+        if (!selectedLayerId) return;
+        const remaining = layers.filter(l => l.id !== selectedLayerId);
+        setLayers(remaining);
+        setSelectedLayerId(remaining.length > 0 ? remaining[remaining.length - 1].id : null);
+    };
+
+    // Canvas coordinate helpers
     const getCanvasCoords = (clientX: number, clientY: number, canvas: HTMLCanvasElement | null) => {
         if (!canvas) return { x: 0, y: 0 };
         const rect = canvas.getBoundingClientRect();
@@ -163,139 +187,152 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         };
     };
 
-    // Find clicked layer
     const findLayerAtPoint = (x: number, y: number): ImageLayer | null => {
-        // Check in reverse order (top layers first)
-        for (let i = layers.length - 1; i >= 0; i--) {
-            const layer = layers[i];
-            const dx = x - layer.x;
-            const dy = y - layer.y;
-            const size = Math.max(layer.image.width, layer.image.height) * layer.scale / 2;
-            if (Math.abs(dx) < size && Math.abs(dy) < size) {
+        for (let i = layersRef.current.length - 1; i >= 0; i--) {
+            const layer = layersRef.current[i];
+            const w = layer.image.width * layer.scale / 2;
+            const h = layer.image.height * layer.scale / 2;
+            if (Math.abs(x - layer.x) < w && Math.abs(y - layer.y) < h) {
                 return layer;
             }
         }
         return null;
     };
 
-    // Drag handlers
-    const startDrag = (clientX: number, clientY: number, canvas: HTMLCanvasElement | null) => {
-        const point = getCanvasCoords(clientX, clientY, canvas);
+    // Unified drag handlers
+    const handlePointerDown = (e: React.PointerEvent, canvas: HTMLCanvasElement | null) => {
+        e.preventDefault();
+        const point = getCanvasCoords(e.clientX, e.clientY, canvas);
+        const clicked = findLayerAtPoint(point.x, point.y);
 
-        // Try to select a layer at click point
-        const clickedLayer = findLayerAtPoint(point.x, point.y);
-        if (clickedLayer) {
-            setSelectedLayerId(clickedLayer.id);
+        if (clicked) {
+            setSelectedLayerId(clicked.id);
             setIsDragging(true);
-            dragStartRef.current = { x: point.x, y: point.y, startX: clickedLayer.x, startY: clickedLayer.y };
+            dragStartRef.current = { x: point.x, y: point.y, startX: clicked.x, startY: clicked.y };
+            (e.target as Element).setPointerCapture(e.pointerId);
         }
     };
 
-    const moveDrag = (clientX: number, clientY: number, canvas: HTMLCanvasElement | null) => {
+    const handlePointerMove = (e: React.PointerEvent, canvas: HTMLCanvasElement | null) => {
         if (!isDragging || !selectedLayerId) return;
-        const point = getCanvasCoords(clientX, clientY, canvas);
+        const point = getCanvasCoords(e.clientX, e.clientY, canvas);
         const dx = point.x - dragStartRef.current.x;
         const dy = point.y - dragStartRef.current.y;
-        updateSelectedLayer({
-            x: dragStartRef.current.startX + dx,
-            y: dragStartRef.current.startY + dy
-        });
+
+        setLayers(prev => prev.map(l =>
+            l.id === selectedLayerId
+                ? { ...l, x: dragStartRef.current.startX + dx, y: dragStartRef.current.startY + dy }
+                : l
+        ));
     };
 
-    const endDrag = () => setIsDragging(false);
+    const handlePointerUp = (e: React.PointerEvent) => {
+        setIsDragging(false);
+        (e.target as Element).releasePointerCapture(e.pointerId);
+    };
 
     // Control buttons component
-    const ControlButtons = ({ inFullscreen = false }: { inFullscreen?: boolean }) => (
-        <div className={`flex flex-wrap justify-center gap-1 sm:gap-2 bg-black/90 backdrop-blur-sm rounded-2xl p-2 sm:p-3 shadow-xl border border-white/10 ${inFullscreen ? 'max-w-md' : ''}`}>
+    const ControlButtons = () => (
+        <div className="flex flex-wrap justify-center items-center gap-1.5 sm:gap-2 bg-black/95 backdrop-blur-md rounded-2xl p-2 sm:p-3 shadow-2xl border border-white/20">
             {/* Add Image */}
             <button
                 type="button"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-primary/20 hover:bg-primary/30 text-primary rounded-full transition-all active:scale-95"
+                onClick={triggerFileInput}
+                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-primary hover:bg-primary/80 text-white rounded-xl transition-all active:scale-90 shadow-lg"
                 title="Add Image"
             >
-                <Plus className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Plus className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
+
+            <div className="w-px h-8 bg-white/20 mx-1" />
 
             {/* Rotate Left */}
             <button
                 type="button"
-                onPointerDown={(e) => { e.stopPropagation(); updateSelectedLayer({ rotation: (selectedLayer?.rotation || 0) - 15 }); }}
+                onClick={rotateLeft}
                 disabled={!selectedLayer}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-full transition-all active:scale-95"
+                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                title="Rotate Left"
             >
-                <RotateCw className="w-4 h-4 sm:w-5 sm:h-5 transform -scale-x-100" />
+                <RotateCw className="w-5 h-5 sm:w-6 sm:h-6 transform -scale-x-100" />
             </button>
 
             {/* Zoom Out */}
             <button
                 type="button"
-                onPointerDown={(e) => { e.stopPropagation(); updateSelectedLayer({ scale: Math.max(0.02, (selectedLayer?.scale || 0.15) - 0.02) }); }}
+                onClick={zoomOut}
                 disabled={!selectedLayer}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-full transition-all active:scale-95"
+                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                title="Zoom Out"
             >
-                <ZoomOut className="w-4 h-4 sm:w-5 sm:h-5" />
+                <ZoomOut className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
             {/* Zoom In */}
             <button
                 type="button"
-                onPointerDown={(e) => { e.stopPropagation(); updateSelectedLayer({ scale: Math.min(1.5, (selectedLayer?.scale || 0.15) + 0.02) }); }}
+                onClick={zoomIn}
                 disabled={!selectedLayer}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-full transition-all active:scale-95"
+                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                title="Zoom In"
             >
-                <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
+                <ZoomIn className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
             {/* Rotate Right */}
             <button
                 type="button"
-                onPointerDown={(e) => { e.stopPropagation(); updateSelectedLayer({ rotation: (selectedLayer?.rotation || 0) + 15 }); }}
+                onClick={rotateRight}
                 disabled={!selectedLayer}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-full transition-all active:scale-95"
+                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                title="Rotate Right"
             >
-                <RotateCw className="w-4 h-4 sm:w-5 sm:h-5" />
+                <RotateCw className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
+
+            <div className="w-px h-8 bg-white/20 mx-1" />
 
             {/* Reset */}
             <button
                 type="button"
-                onPointerDown={(e) => { e.stopPropagation(); resetSelectedLayer(); }}
+                onClick={resetLayer}
                 disabled={!selectedLayer}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 rounded-full transition-all active:scale-95"
+                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-white/10 hover:bg-white/20 disabled:opacity-30 disabled:hover:bg-white/10 rounded-xl transition-all active:scale-90"
+                title="Reset Position"
             >
-                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+                <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
 
             {/* Delete */}
             <button
                 type="button"
-                onPointerDown={(e) => { e.stopPropagation(); deleteSelectedLayer(); }}
+                onClick={deleteLayer}
                 disabled={!selectedLayer}
-                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-red-500/20 hover:bg-red-500/30 text-red-400 disabled:opacity-30 rounded-full transition-all active:scale-95"
+                className="w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center bg-red-500/20 hover:bg-red-500/40 text-red-400 disabled:opacity-30 disabled:hover:bg-red-500/20 rounded-xl transition-all active:scale-90"
+                title="Delete"
             >
-                <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                <Trash2 className="w-5 h-5 sm:w-6 sm:h-6" />
             </button>
         </div>
     );
 
-    // Layer selector for mobile
-    const LayerSelector = () => (
-        <div className="flex gap-2 overflow-x-auto pb-2">
-            {layers.map((layer, index) => (
+    // Layer thumbnails
+    const LayerThumbnails = () => layers.length > 1 ? (
+        <div className="flex gap-2 overflow-x-auto py-2 px-1">
+            {layers.map((layer, i) => (
                 <button
                     key={layer.id}
                     onClick={() => setSelectedLayerId(layer.id)}
-                    className={`flex-shrink-0 w-12 h-12 rounded-lg border-2 overflow-hidden transition-all ${layer.id === selectedLayerId
-                            ? 'border-primary ring-2 ring-primary/30'
-                            : 'border-white/10 hover:border-white/30'
+                    className={`flex-shrink-0 w-14 h-14 sm:w-16 sm:h-16 rounded-xl border-2 overflow-hidden transition-all ${layer.id === selectedLayerId
+                            ? 'border-primary ring-2 ring-primary/40'
+                            : 'border-white/20 hover:border-white/40'
                         }`}
                 >
-                    <img src={layer.image.src} alt={`Layer ${index + 1}`} className="w-full h-full object-cover" />
+                    <img src={layer.image.src} alt={`Layer ${i + 1}`} className="w-full h-full object-cover" />
                 </button>
             ))}
         </div>
-    );
+    ) : null;
 
     if (isLoading) {
         return (
@@ -307,6 +344,15 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
 
     return (
         <>
+            {/* Hidden file input - shared by all buttons */}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleFileChange}
+                className="hidden"
+            />
+
             {/* Fullscreen Modal */}
             <AnimatePresence>
                 {isFullscreen && (
@@ -315,60 +361,53 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
-                        transition={{ duration: 0.2 }}
                     >
-                        <div className="flex justify-between items-center p-3 sm:p-4 border-b border-white/10">
-                            <h3 className="font-bold text-base sm:text-lg">Tape Preview</h3>
+                        {/* Header */}
+                        <div className="flex justify-between items-center px-4 py-3 border-b border-white/10">
+                            <h3 className="font-bold text-lg">Edit Design</h3>
                             <button
                                 type="button"
                                 onClick={() => setIsFullscreen(false)}
                                 className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                             >
-                                <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                                <X className="w-6 h-6" />
                             </button>
                         </div>
 
-                        <div className="flex-1 flex flex-col items-center justify-center p-3 sm:p-4 gap-3 sm:gap-4 overflow-hidden">
-                            {/* Layer selector in fullscreen */}
-                            {layers.length > 1 && (
-                                <div className="w-full max-w-md">
-                                    <LayerSelector />
-                                </div>
-                            )}
+                        {/* Content */}
+                        <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4 overflow-hidden">
+                            {/* Layer thumbnails */}
+                            <LayerThumbnails />
 
-                            <div
-                                className="relative touch-none flex-shrink-0"
-                                onMouseMove={(e) => moveDrag(e.clientX, e.clientY, fullscreenCanvasRef.current)}
-                                onMouseUp={endDrag}
-                                onMouseLeave={endDrag}
-                                onTouchMove={(e) => e.touches[0] && moveDrag(e.touches[0].clientX, e.touches[0].clientY, fullscreenCanvasRef.current)}
-                                onTouchEnd={endDrag}
-                            >
-                                <canvas
-                                    ref={fullscreenCanvasRef}
-                                    width={CANVAS_WIDTH}
-                                    height={CANVAS_HEIGHT}
-                                    className="max-w-[95vw] max-h-[50vh] w-auto h-auto bg-[#0a0a0a] rounded-xl"
-                                    style={{ cursor: layers.length > 0 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
-                                    onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY, fullscreenCanvasRef.current); }}
-                                    onTouchStart={(e) => e.touches[0] && startDrag(e.touches[0].clientX, e.touches[0].clientY, fullscreenCanvasRef.current)}
-                                />
-                            </div>
+                            {/* Canvas */}
+                            <canvas
+                                ref={fullscreenCanvasRef}
+                                width={CANVAS_WIDTH}
+                                height={CANVAS_HEIGHT}
+                                className="max-w-full max-h-[50vh] w-auto h-auto bg-[#0a0a0a] rounded-xl touch-none"
+                                style={{ cursor: layers.length > 0 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+                                onPointerDown={(e) => handlePointerDown(e, fullscreenCanvasRef.current)}
+                                onPointerMove={(e) => handlePointerMove(e, fullscreenCanvasRef.current)}
+                                onPointerUp={handlePointerUp}
+                                onPointerCancel={handlePointerUp}
+                            />
 
-                            <ControlButtons inFullscreen />
+                            {/* Controls */}
+                            <ControlButtons />
                         </div>
                     </motion.div>
                 )}
             </AnimatePresence>
 
+            {/* Main UI */}
             <motion.div
                 className="space-y-4"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.5 }}
             >
                 {/* Canvas Section */}
                 <div className="bg-surface rounded-xl p-4 sm:p-6">
+                    {/* Header */}
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
                             <h3 className="font-bold tracking-wide text-sm">TAPE PREVIEW</h3>
@@ -379,15 +418,6 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                             >
                                 <HelpCircle className="w-4 h-4 text-gray-400" />
                             </button>
-                            {layers.length > 1 && (
-                                <button
-                                    type="button"
-                                    onClick={() => setShowLayers(!showLayers)}
-                                    className="p-1 hover:bg-white/10 rounded-full transition-colors"
-                                >
-                                    <Layers className="w-4 h-4 text-gray-400" />
-                                </button>
-                            )}
                         </div>
                         <button
                             type="button"
@@ -398,66 +428,44 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                         </button>
                     </div>
 
-                    {/* Help Tooltip */}
+                    {/* Help */}
                     <AnimatePresence>
                         {showHelp && (
                             <motion.div
-                                className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-xl text-sm space-y-3"
+                                className="mb-4 p-4 bg-primary/10 border border-primary/20 rounded-xl text-sm space-y-2"
                                 initial={{ opacity: 0, height: 0 }}
                                 animate={{ opacity: 1, height: 'auto' }}
                                 exit={{ opacity: 0, height: 0 }}
                             >
-                                <p className="text-gray-300">
-                                    <strong>📋 This design will repeat across the whole tape!</strong>
-                                </p>
-                                <p className="text-gray-400 text-xs">
-                                    <strong>🎨 Maximum 3 colors per tape</strong> — for best print quality, keep your design simple with up to 3 colors.
-                                </p>
-                                <p className="text-gray-400 text-xs">
-                                    <strong>✨ Simple designs work best</strong> — logos with clean lines and solid colors produce the sharpest results.
-                                </p>
-                                <p className="text-gray-400 text-xs">
-                                    <strong>➕ Add multiple images</strong> — use the + button to add more images to your design!
-                                </p>
-                                <p className="text-gray-400 text-xs">
-                                    Need help? Use the <strong className="text-primary">Free Design Consultation</strong> button below!
-                                </p>
+                                <p className="text-gray-300"><strong>📋 Design repeats across the whole tape</strong></p>
+                                <p className="text-gray-400 text-xs"><strong>🎨 Max 3 colors</strong> — simple designs look best</p>
+                                <p className="text-gray-400 text-xs"><strong>➕ Add multiple images</strong> — use the + button</p>
+                                <p className="text-gray-400 text-xs">Need help? Use <strong className="text-primary">Free Design Consultation</strong> below!</p>
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    {/* Layer selector */}
-                    {showLayers && layers.length > 1 && (
-                        <div className="mb-4">
-                            <LayerSelector />
-                        </div>
-                    )}
+                    {/* Layer thumbnails */}
+                    <LayerThumbnails />
 
-                    {/* Main Canvas */}
-                    <div
-                        className="relative rounded-xl overflow-hidden touch-none"
-                        onMouseMove={(e) => moveDrag(e.clientX, e.clientY, canvasRef.current)}
-                        onMouseUp={endDrag}
-                        onMouseLeave={endDrag}
-                        onTouchMove={(e) => e.touches[0] && moveDrag(e.touches[0].clientX, e.touches[0].clientY, canvasRef.current)}
-                        onTouchEnd={endDrag}
-                    >
+                    {/* Canvas */}
+                    <div className="relative rounded-xl overflow-hidden">
                         <canvas
                             ref={canvasRef}
                             width={CANVAS_WIDTH}
                             height={CANVAS_HEIGHT}
-                            className="w-full h-auto bg-[#0a0a0a] rounded-xl"
+                            className="w-full h-auto bg-[#0a0a0a] rounded-xl touch-none"
                             style={{ cursor: layers.length > 0 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
-                            onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY, canvasRef.current); }}
-                            onTouchStart={(e) => e.touches[0] && startDrag(e.touches[0].clientX, e.touches[0].clientY, canvasRef.current)}
+                            onPointerDown={(e) => handlePointerDown(e, canvasRef.current)}
+                            onPointerMove={(e) => handlePointerMove(e, canvasRef.current)}
+                            onPointerUp={handlePointerUp}
+                            onPointerCancel={handlePointerUp}
                         />
 
-                        {/* Floating Controls */}
-                        {!isProcessing && (
-                            <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2">
-                                <ControlButtons />
-                            </div>
-                        )}
+                        {/* Floating controls */}
+                        <div className="absolute bottom-3 sm:bottom-4 left-1/2 -translate-x-1/2">
+                            <ControlButtons />
+                        </div>
 
                         {isProcessing && (
                             <div className="absolute inset-0 flex items-center justify-center bg-black/80 rounded-xl">
@@ -465,11 +473,11 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                             </div>
                         )}
 
-                        {layers.length > 0 && !isProcessing && (
+                        {layers.length > 0 && (
                             <div className="absolute top-3 left-0 right-0 text-center pointer-events-none">
-                                <p className="text-xs text-gray-400 bg-black/60 inline-block px-3 py-1 rounded-full">
-                                    Tap image to select • Drag to move
-                                </p>
+                                <span className="text-xs text-gray-400 bg-black/70 px-3 py-1 rounded-full">
+                                    Tap to select • Drag to move
+                                </span>
                             </div>
                         )}
                     </div>
@@ -477,11 +485,9 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
 
                 {/* Buttons */}
                 <div className="bg-surface rounded-xl p-4 sm:p-6 space-y-4">
-                    <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
-
                     <motion.button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
+                        onClick={triggerFileInput}
                         disabled={isProcessing}
                         className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-4 rounded-xl font-bold transition-all text-base sm:text-lg"
                         whileHover={{ scale: 1.02 }}
@@ -501,7 +507,7 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                         Free Design Consultation
                     </motion.a>
                     <p className="text-xs text-gray-500 text-center">
-                        Not sure about your design? We'll help you create the perfect tape for free!
+                        Not sure about your design? We'll create the perfect tape for you!
                     </p>
                 </div>
             </motion.div>
