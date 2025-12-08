@@ -4,12 +4,12 @@ import { ArrowLeft, Plus, Minus, ShoppingCart, X, Loader2, CheckCircle } from 'l
 import { motion, AnimatePresence } from 'framer-motion';
 import TapeConfigurator from '../components/TapeConfigurator';
 import { savePreorder } from '../lib/firebase';
-import { uploadBase64ToImgBB, generateUniqueId } from '../lib/imgbb';
+import { uploadToImgBB, uploadBase64ToImgBB, generateUniqueId } from '../lib/imgbb';
 
 const PRICE_PER_ROLL = 250;
 
 export default function CustomizerPage() {
-    const [currentDesign, setCurrentDesign] = useState<{ url: string } | null>(null);
+    const [currentDesign, setCurrentDesign] = useState<{ url: string; files: File[] } | null>(null);
     const [quantity, setQuantity] = useState(1);
     const [showPreorderModal, setShowPreorderModal] = useState(false);
     const [email, setEmail] = useState('');
@@ -18,12 +18,12 @@ export default function CustomizerPage() {
     const [submitError, setSubmitError] = useState('');
     const [uploadProgress, setUploadProgress] = useState('');
 
-    const handleDesignReady = (imageDataUrl: string) => {
-        setCurrentDesign({ url: imageDataUrl });
+    const handleDesignReady = (imageDataUrl: string, files: File[]) => {
+        setCurrentDesign({ url: imageDataUrl, files });
     };
 
     const handlePreorder = () => {
-        if (!currentDesign) {
+        if (!currentDesign || currentDesign.files.length === 0) {
             alert('Please upload at least one design');
             return;
         }
@@ -36,7 +36,7 @@ export default function CustomizerPage() {
             return;
         }
 
-        if (!currentDesign) {
+        if (!currentDesign || currentDesign.files.length === 0) {
             setSubmitError('No design found. Please upload at least one design.');
             return;
         }
@@ -45,18 +45,26 @@ export default function CustomizerPage() {
         setSubmitError('');
 
         try {
-            const uniqueId = generateUniqueId();
+            const orderId = generateUniqueId();
+            const uploadedOriginals: string[] = [];
 
-            setUploadProgress('Uploading your design...');
+            // Upload each original image
+            for (let i = 0; i < currentDesign.files.length; i++) {
+                setUploadProgress(`Uploading image ${i + 1} of ${currentDesign.files.length}...`);
+                const file = currentDesign.files[i];
+                const url = await uploadToImgBB(file, `${orderId}_img${i + 1}`);
+                uploadedOriginals.push(url);
+            }
 
-            // Upload the final tape preview to ImgBB
-            const tapePreviewUrl = await uploadBase64ToImgBB(currentDesign.url, `${uniqueId}_tape`);
+            // Upload the final tape composite
+            setUploadProgress('Uploading final design...');
+            const tapePreviewUrl = await uploadBase64ToImgBB(currentDesign.url, `${orderId}_tape`);
 
-            // Save to Firebase
-            setUploadProgress('Saving your preorder...');
+            // Save to Firebase with all URLs
+            setUploadProgress('Saving preorder...');
             const result = await savePreorder({
                 email,
-                originalImageUrl: tapePreviewUrl, // We only have the final composite now
+                originalImageUrl: uploadedOriginals.join(' | '),
                 tapePreviewUrl,
                 quantity,
                 total: quantity * PRICE_PER_ROLL
@@ -111,6 +119,7 @@ export default function CustomizerPage() {
                                     <div className="flex justify-between items-center mb-6">
                                         <h3 className="text-xl font-bold">Complete Your Preorder</h3>
                                         <button
+                                            type="button"
                                             onClick={() => setShowPreorderModal(false)}
                                             className="p-2 hover:bg-white/10 rounded-lg transition-colors"
                                             disabled={isSubmitting}
@@ -121,6 +130,10 @@ export default function CustomizerPage() {
 
                                     {/* Order Summary */}
                                     <div className="bg-black/30 rounded-xl p-4 mb-6 space-y-2">
+                                        <div className="flex justify-between text-sm text-gray-400">
+                                            <span>Images</span>
+                                            <span>{currentDesign?.files.length || 0}</span>
+                                        </div>
                                         <div className="flex justify-between text-sm text-gray-400">
                                             <span>Quantity</span>
                                             <span>{quantity} roll{quantity > 1 ? 's' : ''}</span>
@@ -150,11 +163,12 @@ export default function CustomizerPage() {
                                     </div>
 
                                     <p className="text-xs text-gray-500 mb-6">
-                                        We'll send you payment details and updates about your order to this email.
+                                        We'll send you payment details and updates about your order.
                                     </p>
 
                                     {/* Submit Button */}
                                     <button
+                                        type="button"
                                         onClick={handleSubmitPreorder}
                                         disabled={isSubmitting}
                                         className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:opacity-50 text-white py-4 rounded-xl font-bold transition-all text-lg"
@@ -194,7 +208,7 @@ export default function CustomizerPage() {
                             Design Your Tape
                         </h1>
                         <p className="text-lg text-gray-400">
-                            Upload your images, position them, and preorder. Add multiple images to one tape!
+                            Upload images, position them, and preorder your custom tape!
                         </p>
                     </div>
 
@@ -216,6 +230,7 @@ export default function CustomizerPage() {
                                     </label>
                                     <div className="flex items-center gap-4">
                                         <button
+                                            type="button"
                                             onClick={() => setQuantity(Math.max(1, quantity - 1))}
                                             className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
                                         >
@@ -223,6 +238,7 @@ export default function CustomizerPage() {
                                         </button>
                                         <span className="text-3xl font-bold w-12 text-center">{quantity}</span>
                                         <button
+                                            type="button"
                                             onClick={() => setQuantity(quantity + 1)}
                                             className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 rounded-lg transition-colors"
                                         >
@@ -245,15 +261,16 @@ export default function CustomizerPage() {
 
                                 {/* Preorder Button */}
                                 <button
+                                    type="button"
                                     onClick={handlePreorder}
-                                    disabled={!currentDesign}
+                                    disabled={!currentDesign || currentDesign.files.length === 0}
                                     className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold transition-all text-lg"
                                 >
                                     <ShoppingCart className="w-5 h-5" />
                                     Preorder Now
                                 </button>
 
-                                {!currentDesign && (
+                                {(!currentDesign || currentDesign.files.length === 0) && (
                                     <p className="text-sm text-gray-500 text-center">
                                         Upload a design to enable preorder
                                     </p>
