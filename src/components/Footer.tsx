@@ -20,14 +20,14 @@ export default function Footer() {
 
                     <div className="flex gap-8 text-sm text-gray-500">
                         <motion.a
-                            href="mailto:info@alura.cz"
+                            href="mailto:simovic.martin@icloud.com"
                             className="hover:text-primary transition-colors"
                             whileHover={{ y: -2 }}
                         >
                             Contact
                         </motion.a>
                         <motion.a
-                            href="https://instagram.com/alura"
+                            href="https://www.instagram.com/aluratape/#"
                             className="hover:text-primary transition-colors"
                             whileHover={{ y: -2 }}
                         >
@@ -36,7 +36,7 @@ export default function Footer() {
                     </div>
 
                     <p className="text-sm text-gray-600">
-                        © 2024 Alura. All rights reserved.
+                        © 2025 Alura. All rights reserved.
                     </p>
                 </div>
             </div>
