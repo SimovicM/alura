@@ -1,10 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Upload, Loader2, MessageCircle, RotateCw, ZoomIn, ZoomOut, RefreshCw, Maximize2, Minimize2, HelpCircle, X } from 'lucide-react';
+import { Upload, Loader2, MessageCircle, RotateCw, ZoomIn, ZoomOut, RefreshCw, Maximize2, HelpCircle, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-/**
- * TAPE CONFIGURATOR - Fullscreen support + Help tooltip
- */
 
 interface TapeConfiguratorProps {
     onDesignReady?: (imageDataUrl: string, file: File) => void;
@@ -15,8 +11,7 @@ const CANVAS_HEIGHT = 300;
 
 export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
-    const fullscreenRef = useRef<HTMLDivElement>(null);
+    const fullscreenCanvasRef = useRef<HTMLCanvasElement>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     const [tapeImage, setTapeImage] = useState<HTMLImageElement | null>(null);
@@ -34,8 +29,8 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         rotation: 0
     });
 
-    const [activeAction, setActiveAction] = useState<'drag' | null>(null);
-    const interactionStartRef = useRef({ x: 0, y: 0 });
+    const [isDragging, setIsDragging] = useState(false);
+    const dragStartRef = useRef({ x: 0, y: 0, startX: 0, startY: 0 });
 
     // Load tape image
     useEffect(() => {
@@ -46,12 +41,13 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         img.src = '/tape.png';
     }, []);
 
-    // Render canvas
-    const renderCanvas = useCallback(() => {
-        const canvas = canvasRef.current;
-        const ctx = canvas?.getContext('2d');
-        if (!canvas || !ctx || !tapeImage) return;
+    // Render to a specific canvas
+    const renderToCanvas = useCallback((canvas: HTMLCanvasElement | null) => {
+        if (!canvas || !tapeImage) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
 
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         ctx.fillStyle = '#0a0a0a';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
         ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -69,22 +65,19 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
             ctx.drawImage(tapeImage, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
             ctx.globalCompositeOperation = 'source-over';
         }
+    }, [tapeImage, userImage, transform]);
 
-        if (userImage && userFile && onDesignReady) {
-            onDesignReady(canvas.toDataURL('image/png'), userFile);
-        }
-    }, [tapeImage, userImage, userFile, transform, onDesignReady]);
-
-    useEffect(() => { renderCanvas(); }, [renderCanvas]);
-
-    // Handle ESC key for fullscreen
+    // Render both canvases
     useEffect(() => {
-        const handleEsc = (e: KeyboardEvent) => {
-            if (e.key === 'Escape' && isFullscreen) setIsFullscreen(false);
-        };
-        window.addEventListener('keydown', handleEsc);
-        return () => window.removeEventListener('keydown', handleEsc);
-    }, [isFullscreen]);
+        renderToCanvas(canvasRef.current);
+        if (isFullscreen) {
+            renderToCanvas(fullscreenCanvasRef.current);
+        }
+
+        if (userImage && userFile && onDesignReady && canvasRef.current) {
+            onDesignReady(canvasRef.current.toDataURL('image/png'), userFile);
+        }
+    }, [renderToCanvas, isFullscreen, userImage, userFile, onDesignReady]);
 
     // File upload
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -106,9 +99,8 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         reader.readAsDataURL(file);
     };
 
-    // Get canvas coordinates
-    const getCanvasPoint = (clientX: number, clientY: number) => {
-        const canvas = canvasRef.current;
+    // Get canvas coordinates from pointer
+    const getCanvasCoords = (clientX: number, clientY: number, canvas: HTMLCanvasElement | null) => {
         if (!canvas) return { x: 0, y: 0 };
         const rect = canvas.getBoundingClientRect();
         return {
@@ -117,27 +109,64 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         };
     };
 
-    // Pointer handlers
-    const handlePointerDown = (clientX: number, clientY: number) => {
+    // Drag handlers
+    const startDrag = (clientX: number, clientY: number, canvas: HTMLCanvasElement | null) => {
         if (!userImage) return;
-        setActiveAction('drag');
-        interactionStartRef.current = getCanvasPoint(clientX, clientY);
+        const point = getCanvasCoords(clientX, clientY, canvas);
+        setIsDragging(true);
+        dragStartRef.current = { x: point.x, y: point.y, startX: transform.x, startY: transform.y };
     };
 
-    const handlePointerMove = (clientX: number, clientY: number) => {
-        if (!activeAction) return;
-        const point = getCanvasPoint(clientX, clientY);
-        const start = interactionStartRef.current;
+    const moveDrag = (clientX: number, clientY: number, canvas: HTMLCanvasElement | null) => {
+        if (!isDragging) return;
+        const point = getCanvasCoords(clientX, clientY, canvas);
+        const dx = point.x - dragStartRef.current.x;
+        const dy = point.y - dragStartRef.current.y;
         setTransform(prev => ({
             ...prev,
-            x: prev.x + (point.x - start.x),
-            y: prev.y + (point.y - start.y)
+            x: dragStartRef.current.startX + dx,
+            y: dragStartRef.current.startY + dy
         }));
-        interactionStartRef.current = point;
     };
 
-    const handlePointerUp = () => setActiveAction(null);
+    const endDrag = () => setIsDragging(false);
     const handleReset = () => setTransform({ x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2, scale: 0.3, rotation: 0 });
+
+    // Control buttons
+    const ControlButtons = () => (
+        <div className="flex gap-1 sm:gap-2 bg-black/90 backdrop-blur-sm rounded-full p-1.5 sm:p-2 shadow-xl border border-white/10">
+            <button
+                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                onClick={() => setTransform(p => ({ ...p, rotation: p.rotation - 15 }))}
+            >
+                <RotateCw className="w-4 h-4 sm:w-5 sm:h-5 transform -scale-x-100" />
+            </button>
+            <button
+                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                onClick={() => setTransform(p => ({ ...p, scale: Math.max(0.1, p.scale - 0.05) }))}
+            >
+                <ZoomOut className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <button
+                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                onClick={() => setTransform(p => ({ ...p, scale: Math.min(1.5, p.scale + 0.05) }))}
+            >
+                <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <button
+                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                onClick={() => setTransform(p => ({ ...p, rotation: p.rotation + 15 }))}
+            >
+                <RotateCw className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+            <button
+                className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
+                onClick={handleReset}
+            >
+                <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
+            </button>
+        </div>
+    );
 
     if (isLoading) {
         return (
@@ -147,94 +176,19 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
         );
     }
 
-    const CanvasContent = ({ inFullscreen = false }: { inFullscreen?: boolean }) => (
-        <div
-            ref={containerRef}
-            className={`relative rounded-xl overflow-hidden touch-none ${inFullscreen ? 'flex items-center justify-center h-full' : ''}`}
-            onMouseMove={(e) => handlePointerMove(e.clientX, e.clientY)}
-            onMouseUp={handlePointerUp}
-            onMouseLeave={handlePointerUp}
-            onTouchMove={(e) => e.touches[0] && handlePointerMove(e.touches[0].clientX, e.touches[0].clientY)}
-            onTouchEnd={handlePointerUp}
-        >
-            <canvas
-                ref={canvasRef}
-                width={CANVAS_WIDTH}
-                height={CANVAS_HEIGHT}
-                className={`bg-[#0a0a0a] rounded-xl ${inFullscreen ? 'max-w-[95vw] max-h-[80vh] w-auto h-auto' : 'w-full h-auto'}`}
-                style={{ cursor: userImage ? (activeAction ? 'grabbing' : 'grab') : 'default' }}
-                onMouseDown={(e) => { e.preventDefault(); handlePointerDown(e.clientX, e.clientY); }}
-                onTouchStart={(e) => e.touches[0] && handlePointerDown(e.touches[0].clientX, e.touches[0].clientY)}
-            />
-
-            {/* Floating Controls */}
-            {userImage && !isProcessing && (
-                <motion.div
-                    className={`absolute ${inFullscreen ? 'bottom-8' : 'bottom-4'} left-1/2 -translate-x-1/2 flex gap-1 sm:gap-2 bg-black/90 backdrop-blur-sm rounded-full p-1.5 sm:p-2 shadow-xl border border-white/10`}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                >
-                    <button
-                        className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                        onClick={() => setTransform(p => ({ ...p, rotation: p.rotation - 15 }))}
-                    >
-                        <RotateCw className="w-4 h-4 sm:w-5 sm:h-5 transform -scale-x-100" />
-                    </button>
-                    <button
-                        className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                        onClick={() => setTransform(p => ({ ...p, scale: Math.max(0.1, p.scale - 0.05) }))}
-                    >
-                        <ZoomOut className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                    <button
-                        className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                        onClick={() => setTransform(p => ({ ...p, scale: Math.min(1.5, p.scale + 0.05) }))}
-                    >
-                        <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                    <button
-                        className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                        onClick={() => setTransform(p => ({ ...p, rotation: p.rotation + 15 }))}
-                    >
-                        <RotateCw className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                    <button
-                        className="w-9 h-9 sm:w-11 sm:h-11 flex items-center justify-center bg-white/10 hover:bg-white/20 rounded-full transition-all active:scale-95"
-                        onClick={handleReset}
-                    >
-                        <RefreshCw className="w-4 h-4 sm:w-5 sm:h-5" />
-                    </button>
-                </motion.div>
-            )}
-
-            {isProcessing && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-                    <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                </div>
-            )}
-
-            {userImage && !isProcessing && (
-                <div className="absolute top-3 left-0 right-0 text-center">
-                    <p className="text-xs text-gray-400 bg-black/60 inline-block px-3 py-1 rounded-full">
-                        Drag to move
-                    </p>
-                </div>
-            )}
-        </div>
-    );
-
     return (
         <>
             {/* Fullscreen Modal */}
             <AnimatePresence>
                 {isFullscreen && (
                     <motion.div
-                        ref={fullscreenRef}
-                        className="fixed inset-0 z-50 bg-black flex flex-col"
+                        className="fixed inset-0 z-[100] bg-black/95 flex flex-col"
                         initial={{ opacity: 0 }}
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
                     >
+                        {/* Header */}
                         <div className="flex justify-between items-center p-4 border-b border-white/10">
                             <h3 className="font-bold text-lg">Tape Preview</h3>
                             <button
@@ -244,8 +198,30 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                                 <X className="w-6 h-6" />
                             </button>
                         </div>
-                        <div className="flex-1 flex items-center justify-center p-4">
-                            <CanvasContent inFullscreen />
+
+                        {/* Canvas Area */}
+                        <div className="flex-1 flex flex-col items-center justify-center p-4 gap-4">
+                            <div
+                                className="relative touch-none"
+                                onMouseMove={(e) => moveDrag(e.clientX, e.clientY, fullscreenCanvasRef.current)}
+                                onMouseUp={endDrag}
+                                onMouseLeave={endDrag}
+                                onTouchMove={(e) => e.touches[0] && moveDrag(e.touches[0].clientX, e.touches[0].clientY, fullscreenCanvasRef.current)}
+                                onTouchEnd={endDrag}
+                            >
+                                <canvas
+                                    ref={fullscreenCanvasRef}
+                                    width={CANVAS_WIDTH}
+                                    height={CANVAS_HEIGHT}
+                                    className="max-w-[95vw] max-h-[60vh] w-auto h-auto bg-[#0a0a0a] rounded-xl"
+                                    style={{ cursor: userImage ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+                                    onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY, fullscreenCanvasRef.current); }}
+                                    onTouchStart={(e) => e.touches[0] && startDrag(e.touches[0].clientX, e.touches[0].clientY, fullscreenCanvasRef.current)}
+                                />
+                            </div>
+
+                            {/* Controls in fullscreen */}
+                            {userImage && <ControlButtons />}
                         </div>
                     </motion.div>
                 )}
@@ -257,12 +233,11 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
             >
-                {/* Canvas */}
+                {/* Canvas Section */}
                 <div className="bg-surface rounded-xl p-4 sm:p-6">
                     <div className="flex justify-between items-center mb-4">
                         <div className="flex items-center gap-2">
                             <h3 className="font-bold tracking-wide text-sm">TAPE PREVIEW</h3>
-                            {/* Help Button */}
                             <button
                                 onClick={() => setShowHelp(!showHelp)}
                                 className="p-1 hover:bg-white/10 rounded-full transition-colors"
@@ -270,7 +245,6 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                                 <HelpCircle className="w-4 h-4 text-gray-400" />
                             </button>
                         </div>
-                        {/* Fullscreen Button */}
                         <button
                             onClick={() => setIsFullscreen(true)}
                             className="p-2 hover:bg-white/10 rounded-lg transition-colors text-gray-400 hover:text-white"
@@ -293,16 +267,55 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                                 </p>
                                 <p className="text-gray-400 text-xs">
                                     Your uploaded design will be printed repeatedly along the entire length of the tape.
-                                    If anything doesn't look right or you need help, use the <strong className="text-primary">Free Design Consultation</strong> button below — we'll make it perfect for you!
+                                    If anything doesn't look right or you need help, use the <strong className="text-primary">Free Design Consultation</strong> button below!
                                 </p>
                             </motion.div>
                         )}
                     </AnimatePresence>
 
-                    <CanvasContent />
+                    {/* Main Canvas */}
+                    <div
+                        className="relative rounded-xl overflow-hidden touch-none"
+                        onMouseMove={(e) => moveDrag(e.clientX, e.clientY, canvasRef.current)}
+                        onMouseUp={endDrag}
+                        onMouseLeave={endDrag}
+                        onTouchMove={(e) => e.touches[0] && moveDrag(e.touches[0].clientX, e.touches[0].clientY, canvasRef.current)}
+                        onTouchEnd={endDrag}
+                    >
+                        <canvas
+                            ref={canvasRef}
+                            width={CANVAS_WIDTH}
+                            height={CANVAS_HEIGHT}
+                            className="w-full h-auto bg-[#0a0a0a] rounded-xl"
+                            style={{ cursor: userImage ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
+                            onMouseDown={(e) => { e.preventDefault(); startDrag(e.clientX, e.clientY, canvasRef.current); }}
+                            onTouchStart={(e) => e.touches[0] && startDrag(e.touches[0].clientX, e.touches[0].clientY, canvasRef.current)}
+                        />
+
+                        {/* Floating Controls on main canvas */}
+                        {userImage && !isProcessing && (
+                            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+                                <ControlButtons />
+                            </div>
+                        )}
+
+                        {isProcessing && (
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/80 rounded-xl">
+                                <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                            </div>
+                        )}
+
+                        {userImage && !isProcessing && (
+                            <div className="absolute top-3 left-0 right-0 text-center pointer-events-none">
+                                <p className="text-xs text-gray-400 bg-black/60 inline-block px-3 py-1 rounded-full">
+                                    Drag to move
+                                </p>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
-                {/* Upload & Consultation */}
+                {/* Buttons */}
                 <div className="bg-surface rounded-xl p-4 sm:p-6 space-y-4">
                     <input ref={fileInputRef} type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
 

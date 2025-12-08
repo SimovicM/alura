@@ -104,14 +104,13 @@ export default function CustomizerPage({ onAddToCart, onOpenCart }: CustomizerPa
                                 </div>
                             </div>
 
-                            {/* Add to Cart Button */}
                             <button
                                 onClick={handleAddToCart}
                                 disabled={!currentDesign}
                                 className="w-full flex items-center justify-center gap-3 bg-primary hover:bg-primary/90 disabled:bg-gray-700 disabled:cursor-not-allowed text-white py-4 rounded-xl font-bold transition-all text-lg"
                             >
                                 <ShoppingCart className="w-5 h-5" />
-                                Add to Cart
+                                Preorder Now
                             </button>
 
                             {!currentDesign && (
