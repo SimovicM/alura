@@ -437,6 +437,28 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                             </button>
                         </div>
 
+                        {/* Helpful message after delay - at the top */}
+                        <AnimatePresence>
+                            {showFullscreenMessage && (
+                                <motion.div
+                                    className="bg-primary/20 border-b border-primary/40 px-6 py-4 text-center"
+                                    initial={{ opacity: 0, y: -20 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -20 }}
+                                >
+                                    <p className="text-sm text-gray-200 mb-3">
+                                        Don't worry if it doesn't look right. Our design team can help you perfect it.
+                                    </p>
+                                    <a
+                                        href="mailto:info@alura.cz?subject=Free Design Consultation"
+                                        className="inline-block bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all"
+                                    >
+                                        Get Free Help
+                                    </a>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
+
                         {/* Main Content */}
                         <div className="flex-1 flex flex-col items-center justify-center p-8 gap-8 overflow-auto relative">
                             {/* Canvas - takes most of the space */}
@@ -455,28 +477,6 @@ export default function TapeConfigurator({ onDesignReady }: TapeConfiguratorProp
                             {layers.length > 0 && (
                                 <p className="text-sm text-gray-400 text-center">Click to select • Drag to move</p>
                             )}
-
-                            {/* Helpful message after delay */}
-                            <AnimatePresence>
-                                {showFullscreenMessage && (
-                                    <motion.div
-                                        className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-primary/20 border border-primary/40 rounded-lg p-4 max-w-sm text-center"
-                                        initial={{ opacity: 0, y: 20 }}
-                                        animate={{ opacity: 1, y: 0 }}
-                                        exit={{ opacity: 0, y: 20 }}
-                                    >
-                                        <p className="text-sm text-gray-200 mb-3">
-                                            Don't worry if it doesn't look right. Our design team can help you perfect it.
-                                        </p>
-                                        <a
-                                            href="mailto:info@alura.cz?subject=Free Design Consultation"
-                                            className="inline-block bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-xs font-bold transition-all"
-                                        >
-                                            Get Free Help
-                                        </a>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
                         </div>
 
                         {/* Footer - Toolbar */}
