@@ -13,14 +13,9 @@ export default function Hero() {
         <section id="hero" className="min-h-screen flex flex-col items-center justify-center relative px-6 pt-20">
             <div className="relative z-10 text-center max-w-4xl">
                 {/* Headline */}
-                <motion.h1
-                    className="text-6xl md:text-8xl font-modak text-white mb-6 tracking-tight"
-                    initial={{ opacity: 0, y: 30 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.8, ease: "easeOut" }}
-                >
+                <h1 className="text-6xl md:text-8xl font-modak text-white mb-6 tracking-tight">
                     100% Custom<br />Athletic Tapes
-                </motion.h1>
+                </h1>
 
                 {/* Subtitle */}
                 <motion.p

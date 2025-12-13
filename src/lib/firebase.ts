@@ -14,19 +14,35 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
+interface SignupData {
+    email: string;
+}
+
 interface PreorderData {
     email: string;
-    originalImageUrl: string;  // The uploaded design
-    tapePreviewUrl: string;    // The design on tape
+    originalImageUrl: string;
+    tapePreviewUrl: string;
     quantity: number;
     total: number;
+}
+
+export async function saveSignup(data: SignupData) {
+    try {
+        const docRef = await addDoc(collection(db, "signups"), {
+            ...data,
+            createdAt: serverTimestamp()
+        });
+        return { success: true, id: docRef.id };
+    } catch (error) {
+        console.error("Error saving signup:", error);
+        return { success: false, error };
+    }
 }
 
 export async function savePreorder(data: PreorderData) {
     try {
         const docRef = await addDoc(collection(db, "preorders"), {
             ...data,
-            status: "pending",
             createdAt: serverTimestamp()
         });
         return { success: true, id: docRef.id };
@@ -35,3 +51,4 @@ export async function savePreorder(data: PreorderData) {
         return { success: false, error };
     }
 }
+

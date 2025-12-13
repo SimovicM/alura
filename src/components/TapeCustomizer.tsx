@@ -80,8 +80,8 @@ export default function TapeCustomizer({ onDesignChange, onImageFile }: TapeCust
     }, []);
 
     /**
-     * CANVAS RENDERING FUNCTION
-     * Draws the composition: user image → mask clipping → tape overlay
+     * CANVAS RENDERING
+     * Draws the composition: tape base → user image → mask clipping
      */
     const renderCanvas = useCallback(() => {
         const canvas = canvasRef.current;
@@ -92,6 +92,11 @@ export default function TapeCustomizer({ onDesignChange, onImageFile }: TapeCust
 
         // Clear canvas
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // Draw tape base overlay first
+        if (tapeBase) {
+            ctx.drawImage(tapeBase, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        }
 
         // If user uploaded an image, draw it with transform
         if (userImage) {
@@ -123,22 +128,17 @@ export default function TapeCustomizer({ onDesignChange, onImageFile }: TapeCust
             }
         }
 
-        // Draw tape base overlay on top
-        if (tapeBase) {
-            ctx.drawImage(tapeBase, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-        }
-
         // Export data URL when rendering changes
         if (onDesignChange) {
             const dataUrl = userImage ? canvas.toDataURL('image/png') : null;
             onDesignChange(dataUrl);
         }
-    }, [userImage, tapeBase, tapeMask, transform, onDesignChange]);
+    }, [userImage, tapeBase, tapeMask, transform]);
 
     // Re-render canvas when dependencies change
     useEffect(() => {
         renderCanvas();
-    }, [renderCanvas]);
+    }, [userImage, tapeBase, tapeMask, transform]);
 
     /**
      * IMAGE UPLOAD HANDLER
