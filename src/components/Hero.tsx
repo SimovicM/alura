@@ -29,7 +29,7 @@ export default function Hero() {
 
                 {/* CTA Button */}
                 <motion.button
-                    onClick={() => navigate('/customize')}
+                    onClick={() => window.open('https://design.aluratape.cz', '_blank', 'noopener,noreferrer')}
                     className="bg-primary hover:bg-primary/90 text-white px-12 py-4 rounded-full text-base font-bold tracking-wide transition-all uppercase"
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}

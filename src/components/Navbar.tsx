@@ -40,12 +40,22 @@ export default function Navbar({ cartItemCount, onCartClick }: NavbarProps) {
                         </motion.button>
                     )}
                     <motion.button
-                        onClick={() => navigate('/customize')}
+                        onClick={() => window.open('https://design.aluratape.cz', '_blank', 'noopener,noreferrer')}
                         className="hover:text-primary transition-colors font-medium text-sm tracking-wide"
                         whileHover={{ y: -2 }}
                     >
                         DESIGN
                     </motion.button>
+
+                    {isHome && (
+                        <motion.button
+                            onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
+                            className="hover:text-primary transition-colors font-medium text-sm tracking-wide"
+                            whileHover={{ y: -2 }}
+                        >
+                            PRODUCTS
+                        </motion.button>
+                    )}
                     <motion.button
                         onClick={onCartClick}
                         className="relative hover:text-primary transition-colors"

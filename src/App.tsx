@@ -8,6 +8,9 @@ import Cart from './components/Cart';
 import Checkout from './components/Checkout';
 import Footer from './components/Footer';
 import CustomizerPage from './pages/CustomizerPage';
+import OldCustomizerPage from './pages/OldCustomizerPage';
+import Products from './components/Products';
+import { saveSignup } from './lib/firebase';
 import type { CartItem } from './types';
 
 function App() {
@@ -33,13 +36,23 @@ function App() {
     }
 
     setIsSubmittingSignup(true);
-    // Here you would send the email to your backend or service
-    // For now, just simulate
-    setTimeout(() => {
+
+    try {
+      const res = await saveSignup({ email: signupEmail });
       setIsSubmittingSignup(false);
-      setShowSignupPopup(false);
-      alert('Thank you for signing up! You\'ll be the first to know when Alura drops.');
-    }, 1000);
+      if (res.success) {
+        setShowSignupPopup(false);
+        setSignupEmail('');
+        alert('Thanks! We saved your email and will keep you posted.');
+      } else {
+        console.error(res.error);
+        alert('Failed to save signup. Please try again later.');
+      }
+    } catch (error) {
+      console.error('Signup error:', error);
+      setIsSubmittingSignup(false);
+      alert('Failed to save signup. Please try again later.');
+    }
   };
 
   const handleUpdateQuantity = (id: string, quantity: number) => {
@@ -80,6 +93,7 @@ function App() {
             <>
               <Hero />
               <About />
+              <Products />
               <Footer />
             </>
           ) : (
@@ -93,9 +107,9 @@ function App() {
           )
         } />
 
-        {/* Dedicated Configurator Page */}
+        {/* Dedicated Configurator Page (old) */}
         <Route path="/customize" element={
-          <CustomizerPage />
+          <OldCustomizerPage />
         } />
       </Routes>
 
