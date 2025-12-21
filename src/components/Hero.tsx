@@ -1,10 +1,7 @@
-import { useNavigate } from 'react-router-dom';
 import { ArrowDown } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 export default function Hero() {
-    const navigate = useNavigate();
-
     const scrollToAbout = () => {
         document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' });
     };

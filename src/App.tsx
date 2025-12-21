@@ -7,7 +7,6 @@ import About from './components/About';
 import Cart from './components/Cart';
 import Checkout from './components/Checkout';
 import Footer from './components/Footer';
-import CustomizerPage from './pages/CustomizerPage';
 import OldCustomizerPage from './pages/OldCustomizerPage';
 import Products from './components/Products';
 import { saveSignup } from './lib/firebase';
