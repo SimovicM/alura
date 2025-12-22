@@ -22,9 +22,42 @@ function App() {
   const [isSubmittingSignup, setIsSubmittingSignup] = useState(false);
   const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percent: number } | null>(null);
 
+  // Privacy-friendly persistence: prefer localStorage, fallback to a same-site cookie.
+  const SIGNUP_SEEN_KEY = 'alura_signup_seen';
+
+  const markSignupSeen = () => {
+    try {
+      localStorage.setItem(SIGNUP_SEEN_KEY, '1');
+    } catch (e) {
+      // ignore localStorage errors (e.g., private mode)
+    }
+    try {
+      // 1 year expiration, SameSite=strict as a privacy-respecting fallback
+      document.cookie = `${SIGNUP_SEEN_KEY}=1; max-age=${60 * 60 * 24 * 365}; path=/; samesite=strict`;
+    } catch (e) {
+      // ignore cookie set errors
+    }
+  };
+
+  const hasSeenSignup = () => {
+    try {
+      if (localStorage.getItem(SIGNUP_SEEN_KEY) === '1') return true;
+    } catch (e) {
+      // ignore
+    }
+    try {
+      return document.cookie.split(';').some(c => c.trim().startsWith(`${SIGNUP_SEEN_KEY}=`));
+    } catch (e) {
+      return false;
+    }
+  };
+
   useEffect(() => {
+    if (hasSeenSignup()) return; // don't show again if user already saw it
+
     const timer = setTimeout(() => {
-      setShowSignupPopup(true);
+      // Double-check before showing
+      if (!hasSeenSignup()) setShowSignupPopup(true);
     }, 5000); // 5 seconds
 
     return () => clearTimeout(timer);
@@ -42,6 +75,7 @@ function App() {
       const res = await saveSignup({ email: signupEmail });
       setIsSubmittingSignup(false);
       if (res.success) {
+        markSignupSeen();
         setShowSignupPopup(false);
         setSignupEmail('');
         alert('Thanks! We saved your email and will keep you posted.');
@@ -209,7 +243,10 @@ function App() {
 
               <div className="flex gap-3">
                 <button
-                  onClick={() => setShowSignupPopup(false)}
+                  onClick={() => {
+                    markSignupSeen();
+                    setShowSignupPopup(false);
+                  }}
                   className="flex-1 px-4 py-3 border border-white/10 hover:bg-white/5 rounded-lg transition-all font-medium"
                 >
                   Maybe Later
