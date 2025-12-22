@@ -28,6 +28,16 @@ export interface PreorderData {
     productImage?: string;
     quantity: number;
     total: number;
+    couponCode?: string;
+    couponApplied?: boolean;
+    discountAmount?: number;
+}
+
+export interface Coupon {
+    id?: string;
+    code: string;
+    percent: number; // percent discount (e.g. 10 for 10%)
+    active?: boolean;
 }
 
 export interface Product {
@@ -64,6 +74,38 @@ export async function savePreorder(data: PreorderData) {
     } catch (error) {
         console.error("Error saving preorder:", error);
         return { success: false, error };
+    }
+}
+
+export async function addCoupon(data: Coupon) {
+    try {
+        const docRef = await addDoc(collection(db, "coupons"), {
+            code: data.code,
+            percent: data.percent,
+            active: data.active ?? true,
+            createdAt: serverTimestamp()
+        });
+        return { success: true, id: docRef.id };
+    } catch (error) {
+        console.error('Error adding coupon:', error);
+        return { success: false, error };
+    }
+}
+
+export async function getCouponByCode(code: string): Promise<Coupon | null> {
+    try {
+        const snapshot = await getDocs(collection(db, 'coupons'));
+        let found: Coupon | null = null;
+        snapshot.forEach(docSnap => {
+            const data = docSnap.data() as any;
+            if (String(data.code).toLowerCase() === code.toLowerCase() && data.active) {
+                found = { id: docSnap.id, code: data.code, percent: data.percent, active: data.active };
+            }
+        });
+        return found;
+    } catch (error) {
+        console.error('Error fetching coupon:', error);
+        return null;
     }
 }
 

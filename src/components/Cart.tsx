@@ -1,3 +1,4 @@
+import React from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { X, Trash2, ShoppingBag } from 'lucide-react';
 import type { CartItem } from '../types';
@@ -9,10 +10,19 @@ interface CartProps {
     onUpdateQuantity: (id: string, quantity: number) => void;
     onRemoveItem: (id: string) => void;
     onCheckout: () => void;
+    appliedCoupon?: { code: string; percent: number } | null;
+    onApplyCoupon?: (code: string) => Promise<boolean>;
 }
 
-export default function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemoveItem, onCheckout }: CartProps) {
+export default function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemoveItem, onCheckout, appliedCoupon, onApplyCoupon }: CartProps) {
+    const [couponInput, setCouponInput] = React.useState('');
+    const [couponMessage, setCouponMessage] = React.useState<string | null>(null);
+    const [applying, setApplying] = React.useState(false);
+
     const total = items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+
+    const discount = appliedCoupon ? Math.round((appliedCoupon.percent / 100) * total * 100) / 100 : 0;
+    const discountedTotal = Math.round((total - discount) * 100) / 100;
 
     return (
         <AnimatePresence>
@@ -92,19 +102,33 @@ export default function Cart({ isOpen, onClose, items, onUpdateQuantity, onRemov
                                                         +
                                                     </button>
                                                 </div>
-                                                <span className="font-bold text-primary">{item.price * item.quantity} Kč</span>
+                                                <span className="font-bold text-primary">{item.price * item.quantity} €</span>
                                             </div>
                                         </div>
                                     </div>
                                 ))
                             )}
                         </div>
-
                         {items.length > 0 && (
                             <div className="p-6 border-t border-white/10 space-y-4">
+                                <div className="space-y-2">
+                                    <label className="block text-sm font-bold">Coupon Code</label>
+                                    <div className="flex gap-2">
+                                        <input value={couponInput} onChange={(e) => setCouponInput(e.target.value)} className="flex-1 px-3 py-2 bg-black/50 rounded border border-white/10" />
+                                        <button onClick={async () => {
+                                            if (!onApplyCoupon) return;
+                                            setApplying(true);
+                                            const ok = await onApplyCoupon(couponInput.trim());
+                                            setApplying(false);
+                                            setCouponMessage(ok ? 'Coupon applied' : 'Invalid coupon');
+                                        }} className="px-4 py-2 bg-primary text-white rounded">{applying ? 'Applying...' : 'Apply'}</button>
+                                    </div>
+                                    {couponMessage && <div className="text-sm text-gray-300">{couponMessage}</div>}
+                                </div>
+
                                 <div className="flex justify-between items-center text-xl font-bold">
                                     <span>Total</span>
-                                    <span className="text-primary">{total} Kč</span>
+                                    <span className="text-primary">{discountedTotal} €</span>
                                 </div>
                                 <button
                                     onClick={onCheckout}

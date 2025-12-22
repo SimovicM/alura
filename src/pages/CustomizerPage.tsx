@@ -6,7 +6,7 @@ import TapeConfigurator from '../components/TapeConfigurator';
 import { savePreorder } from '../lib/firebase';
 import { uploadToImgBB, uploadBase64ToImgBB, generateUniqueId } from '../lib/imgbb';
 
-const PRICE_PER_ROLL = 250;
+const PRICE_PER_ROLL = 7.99; // price in euros
 
 export default function CustomizerPage() {
     const [currentDesign, setCurrentDesign] = useState<{ url: string; files: File[] } | null>(null);
@@ -140,7 +140,7 @@ export default function CustomizerPage() {
                                         </div>
                                         <div className="flex justify-between text-lg font-bold pt-2 border-t border-white/10">
                                             <span>Total</span>
-                                            <span className="text-primary">{total} Kč</span>
+                                            <span className="text-primary">{total} €</span>
                                         </div>
                                     </div>
 
@@ -251,11 +251,11 @@ export default function CustomizerPage() {
                                 <div className="border-t border-white/10 pt-6 space-y-2">
                                     <div className="flex justify-between text-gray-400">
                                         <span>Price per roll</span>
-                                        <span className="font-medium">{PRICE_PER_ROLL} Kč</span>
+                                        <span className="font-medium">{PRICE_PER_ROLL} €</span>
                                     </div>
                                     <div className="flex justify-between text-2xl font-bold">
                                         <span>Total</span>
-                                        <span className="text-primary">{total} Kč</span>
+                                        <span className="text-primary">{total} €</span>
                                     </div>
                                 </div>
 

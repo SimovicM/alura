@@ -2,13 +2,15 @@ import { useState } from 'react';
 import { CheckCircle, Loader } from 'lucide-react';
 import type { CartItem } from '../types';
 import { uploadToImgBB } from '../lib/imgbb';
+import { savePreorder } from '../lib/firebase';
 
 interface CheckoutProps {
     items: CartItem[];
     onComplete: () => void;
+    appliedCoupon?: { code: string; percent: number } | null;
 }
 
-export default function Checkout({ items, onComplete }: CheckoutProps) {
+export default function Checkout({ items, onComplete, appliedCoupon }: CheckoutProps) {
     const [email, setEmail] = useState('');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isComplete, setIsComplete] = useState(false);
@@ -21,23 +23,32 @@ export default function Checkout({ items, onComplete }: CheckoutProps) {
 
         try {
             const uploadPromises = items.map(async (item) => {
-                const imageUrl = await uploadToImgBB(item.design.imageFile);
-                return { ...item, design: { ...item.design, imageUrl } };
+                if (item.design.imageFile) {
+                    const imageUrl = await uploadToImgBB(item.design.imageFile);
+                    return { ...item, design: { ...item.design, imageUrl } };
+                }
+                return item; // already has imageUrl/thumbnail
             });
 
             const uploadedItems = await Promise.all(uploadPromises);
 
-            console.log('Order placed:', {
+            const orderItems = uploadedItems.map(item => ({
+                designUrl: item.design.imageUrl || item.design.thumbnail,
+                quantity: item.quantity,
+                price: item.price
+            }));
+
+            // Save preorder to firebase (include coupon info if present)
+            await savePreorder({
                 email,
-                items: uploadedItems.map(item => ({
-                    designUrl: item.design.imageUrl,
-                    quantity: item.quantity,
-                    price: item.price
-                })),
+                quantity: items.reduce((s, it) => s + it.quantity, 0),
                 total,
-                currency: 'CZK',
-                timestamp: new Date().toISOString()
-            });
+                productName: JSON.stringify(orderItems),
+                // coupon fields
+                couponCode: appliedCoupon?.code,
+                couponApplied: !!appliedCoupon,
+                discountAmount: appliedCoupon ? Math.round((appliedCoupon.percent / 100) * total * 100) / 100 : 0
+            } as any);
 
             await new Promise(resolve => setTimeout(resolve, 1500));
             setIsComplete(true);
@@ -92,16 +103,16 @@ export default function Checkout({ items, onComplete }: CheckoutProps) {
                                     />
                                     <div className="flex-1">
                                         <p className="font-bold">Custom Tape x{item.quantity}</p>
-                                        <p className="text-sm text-gray-500">{item.price} Kč each</p>
+                                        <p className="text-sm text-gray-500">{item.price} € each</p>
                                     </div>
-                                    <p className="font-bold text-primary">{item.price * item.quantity} Kč</p>
+                                    <p className="font-bold text-primary">{item.price * item.quantity} €</p>
                                 </div>
                             ))}
                         </div>
                         <div className="border-t border-white/10 pt-4">
                             <div className="flex justify-between text-xl font-bold">
                                 <span>Total</span>
-                                <span className="text-primary">{total} Kč</span>
+                                <span className="text-primary">{total} €</span>
                             </div>
                         </div>
                     </div>

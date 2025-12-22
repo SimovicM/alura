@@ -10,10 +10,10 @@ const COLLECTION = 'products';
 // Sample products with image filenames
 // Upload image files to /public folder with these exact names:
 const sampleProducts = [
-  { name: 'Alura Black', imageUrl: 'alurablack.png', price: 200, preorder: true },  // Save as: alurablack.png
-  { name: 'Alura White', imageUrl: 'alurawhite.png', price: 200, preorder: true },  // Save as: alurawhite.png
-  { name: 'Cross Black', imageUrl: 'crossblack.png', price: 200, preorder: true },  // Save as: crossblack.png
-  { name: 'Cross White', imageUrl: 'crosswhite.png', price: 200, preorder: true }   // Save as: crosswhite.png
+  { name: 'Alura Black', imageUrl: 'alurablack.png', price: 7.99, preorder: true },  // Save as: alurablack.png
+  { name: 'Alura White', imageUrl: 'alurawhite.png', price: 7.99, preorder: true },  // Save as: alurawhite.png
+  { name: 'Cross Black', imageUrl: 'crossblack.png', price: 7.99, preorder: true },  // Save as: crossblack.png
+  { name: 'Cross White', imageUrl: 'crosswhite.png', price: 7.99, preorder: true }   // Save as: crosswhite.png
 ];
 
 async function addProduct(product) {
@@ -22,7 +22,7 @@ async function addProduct(product) {
     fields: {
       name: { stringValue: product.name },
       imageUrl: { stringValue: product.imageUrl },
-      price: { integerValue: String(product.price) },
+      price: { doubleValue: String(product.price) },
       preorder: { booleanValue: product.preorder },
       createdAt: { timestampValue: new Date().toISOString() }
     }

@@ -1,7 +1,7 @@
 export interface CustomDesign {
     id: string;
     imageUrl: string;
-    imageFile: File;
+    imageFile?: File | null;
     thumbnail: string;
 }
 

@@ -7,8 +7,8 @@ interface ConfiguratorProps {
     onAddToCart: (design: CustomDesign, quantity: number) => void;
 }
 
-// Updated pricing: 250 CZK per roll
-const PRICE_PER_ROLL = 250;
+// Updated pricing: price in euros
+const PRICE_PER_ROLL = 7.99;
 
 export default function Configurator({ onAddToCart }: ConfiguratorProps) {
     const [imageFile, setImageFile] = useState<File | null>(null);
@@ -91,11 +91,11 @@ export default function Configurator({ onAddToCart }: ConfiguratorProps) {
                             <div className="border-t border-white/10 pt-6">
                                 <div className="flex justify-between items-center mb-2 text-gray-400">
                                     <span className="text-sm">Price per roll</span>
-                                    <span className="font-bold">{PRICE_PER_ROLL} Kč</span>
+                                    <span className="font-bold">{PRICE_PER_ROLL} €</span>
                                 </div>
                                 <div className="flex justify-between items-center text-2xl font-bold">
                                     <span>Total</span>
-                                    <span className="text-primary">{total} Kč</span>
+                                    <span className="text-primary">{total} €</span>
                                 </div>
                             </div>
 

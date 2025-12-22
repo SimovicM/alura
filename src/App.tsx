@@ -9,6 +9,7 @@ import Checkout from './components/Checkout';
 import Footer from './components/Footer';
 import OldCustomizerPage from './pages/OldCustomizerPage';
 import Products from './components/Products';
+import MobileDashboard from './components/MobileDashboard';
 import { saveSignup } from './lib/firebase';
 import type { CartItem } from './types';
 
@@ -19,6 +20,7 @@ function App() {
   const [showSignupPopup, setShowSignupPopup] = useState(false);
   const [signupEmail, setSignupEmail] = useState('');
   const [isSubmittingSignup, setIsSubmittingSignup] = useState(false);
+  const [appliedCoupon, setAppliedCoupon] = useState<{ code: string; percent: number } | null>(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -60,6 +62,34 @@ function App() {
     ));
   };
 
+  const handleAddToCart = (item: any, quantity = 1) => {
+    setCartItems(prev => {
+      const found = prev.find(i => i.id === item.id);
+      if (found) {
+        return prev.map(i => i.id === item.id ? { ...i, quantity: i.quantity + quantity } : i);
+      }
+      return [...prev, { ...item, quantity }];
+    });
+    setIsCartOpen(true);
+  };
+
+  const handleApplyCoupon = async (code: string) => {
+    if (!code) return false;
+    try {
+      const { getCouponByCode } = await import('./lib/firebase');
+      const c = await getCouponByCode(code);
+      if (c) {
+        setAppliedCoupon({ code: c.code, percent: c.percent });
+        return true;
+      }
+      setAppliedCoupon(null);
+      return false;
+    } catch (error) {
+      console.error('Coupon apply error', error);
+      return false;
+    }
+  };
+
   const handleRemoveItem = (id: string) => {
     setCartItems(cartItems.filter(item => item.id !== id));
   };
@@ -92,7 +122,7 @@ function App() {
             <>
               <Hero />
               <About />
-              <Products />
+              <Products onAddToCart={handleAddToCart} />
               <Footer />
             </>
           ) : (
@@ -100,6 +130,7 @@ function App() {
               <Checkout
                 items={cartItems}
                 onComplete={handleCheckoutComplete}
+                appliedCoupon={appliedCoupon}
               />
               <Footer />
             </>
@@ -119,6 +150,15 @@ function App() {
         onUpdateQuantity={handleUpdateQuantity}
         onRemoveItem={handleRemoveItem}
         onCheckout={handleCheckout}
+        appliedCoupon={appliedCoupon}
+        onApplyCoupon={handleApplyCoupon}
+      />
+
+      <MobileDashboard
+        items={cartItems}
+        onOpenCart={() => setIsCartOpen(true)}
+        appliedCoupon={appliedCoupon}
+        onApplyCoupon={handleApplyCoupon}
       />
 
       {/* Signup Popup */}
