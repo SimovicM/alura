@@ -89,7 +89,7 @@ export default function Products() {
                             <div key={p.id} className="bg-surface rounded-xl p-4 space-y-3">
                                 <div className="h-44 bg-black/20 rounded-lg overflow-hidden flex items-center justify-center">
                                     {p.imageUrl ? (
-                                        <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" />
+                                        <img src={`/${p.imageUrl}`} alt={p.name} className="w-full h-full object-cover" />
                                     ) : (
                                         <div className="text-gray-500">No image</div>
                                     )}

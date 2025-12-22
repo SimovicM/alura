@@ -7,9 +7,14 @@ const FIRESTORE_API_KEY = 'AIzaSyAdeQrlo5zwhLiPmHqO45MxK9wXTNGRL4I';
 const PROJECT_ID = 'aluratapes';
 const COLLECTION = 'products';
 
-function randomName() {
-  return `Design ${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
-}
+// Sample products with image filenames
+// Upload image files to /public folder with these exact names:
+const sampleProducts = [
+  { name: 'Alura Black', imageUrl: 'alurablack.png', price: 200, preorder: true },  // Save as: alurablack.png
+  { name: 'Alura White', imageUrl: 'alurawhite.png', price: 200, preorder: true },  // Save as: alurawhite.png
+  { name: 'Cross Black', imageUrl: 'crossblack.png', price: 200, preorder: true },  // Save as: crossblack.png
+  { name: 'Cross White', imageUrl: 'crosswhite.png', price: 200, preorder: true }   // Save as: crosswhite.png
+];
 
 async function addProduct(product) {
   const url = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/${COLLECTION}?key=${FIRESTORE_API_KEY}`;
@@ -40,16 +45,10 @@ async function addProduct(product) {
 
 (async () => {
   try {
-    console.log('Seeding 5 placeholder products...');
-    for (let i = 0; i < 5; i++) {
-      const prod = {
-        name: randomName(),
-        imageUrl: '',
-        price: 200,
-        preorder: true
-      };
+    console.log(`Seeding ${sampleProducts.length} products with image filenames...`);
+    for (const prod of sampleProducts) {
       const added = await addProduct(prod);
-      console.log('Added:', added.name || added.documents || added);
+      console.log(`Added: ${prod.name} (${prod.imageUrl})`);
     }
     console.log('Seeding complete.');
   } catch (err) {
