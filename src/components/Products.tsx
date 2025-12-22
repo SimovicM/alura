@@ -134,10 +134,10 @@ export default function Products() {
 
                                 <div className="space-y-3">
                                     <label className="block text-sm font-bold">Your Email</label>
-                                    <input className="w-full px-3 py-2 bg-black/50 rounded" value={email} onChange={(e) => setEmail(e.target.value)} />
+                                    <input className="w-full px-3 py-2 bg-black/50 rounded border border-white/30 focus:border-primary outline-none" value={email} onChange={(e) => setEmail(e.target.value)} />
 
                                     <label className="block text-sm font-bold">Quantity</label>
-                                    <input type="number" className="w-full px-3 py-2 bg-black/50 rounded" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
+                                    <input type="number" className="w-full px-3 py-2 bg-black/50 rounded border border-white/30 focus:border-primary outline-none" value={quantity} onChange={(e) => setQuantity(Number(e.target.value))} />
 
                                     <div className="flex gap-2 mt-4">
                                         <button onClick={handleSubmitPreorder} disabled={isSubmittingPreorder} className="bg-primary text-white px-4 py-2 rounded">
