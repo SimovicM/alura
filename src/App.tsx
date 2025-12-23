@@ -9,7 +9,7 @@ import Checkout from './components/Checkout';
 import Footer from './components/Footer';
 import OldCustomizerPage from './pages/OldCustomizerPage';
 import Products from './components/Products';
-import MobileDashboard from './components/MobileDashboard';
+/* Mobile dashboard removed for mobile bottom nav replacement */
 import { saveSignup } from './lib/firebase';
 import type { CartItem } from './types';
 
@@ -188,12 +188,7 @@ function App() {
         onApplyCoupon={handleApplyCoupon}
       />
 
-      <MobileDashboard
-        items={cartItems}
-        onOpenCart={() => setIsCartOpen(true)}
-        appliedCoupon={appliedCoupon}
-        onApplyCoupon={handleApplyCoupon}
-      />
+      {/* Mobile bottom cart removed — the mobile navbar now contains a dropdown and cart access */}
 
       {/* Signup Popup */}
       {showSignupPopup && (
