@@ -35,7 +35,7 @@ export default function Footer() {
                         </motion.a>
                     </div>
 
-                    <p className="text-sm text-gray-600">© 2025 Alura. All rights reserved.</p>
+                    <p className="text-sm text-gray-600">© 2026 Alura. All rights reserved.</p>
                 </div>
             </div>
 
